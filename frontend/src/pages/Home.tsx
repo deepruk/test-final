@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  ArrowRight, BarChart3, BookOpen, CalendarClock, Check, ChevronDown, Clock3, Gauge, Globe2, Inbox, Layers, LifeBuoy,
+  ArrowRight, BarChart3, BookOpen, CalendarClock, Check, ChevronDown, Clock3, Flame, Gauge, Globe2, Inbox, Layers, LifeBuoy,
   MailCheck, Minus, Newspaper, Server, ShieldCheck, Shuffle, Sliders, Sparkles, Timer, Wand2, Zap,
 } from "lucide-react";
 import { Logo, ThemeToggle } from "@/components/AppShell";
