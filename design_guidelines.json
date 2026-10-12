@@ -1,19 +1,52 @@
 {
-  "$schema": "https://json.schemastore.org/design-tokens",
-  "app_name": "OutreachForge",
-  "app_tagline": "The Sovereign Cold Outreach Engine & Deliverability Infrastructure",
-  "archetype": "SWISS_AND_HIGH_CONTRAST_PERFORMANCE",
-  "theme_mode": "dark_default_with_light_support",
+  "theme_strategy": {
+    "default_mode": "dark",
+    "rationale": "High-ticket enterprise B2B cold outreach engine ($100k agency grade). Dark cockpit mode provides high contrast data density for multi-inbox rotation telemetry, spam score gauge meters, and high-frequency delivery analytics without eye fatigue. Subtle electric cyan/emerald accents denote deliverability health.",
+    "theme_archetype": "ARCHETYPE 4: SWISS & HIGH-CONTRAST / TACTICAL MINIMALISM (Performance Pro + Cyber Infrastructure)",
+    "ai_slop_avoided": "No generic purple-indigo gradients, no centered generic hero with floating isometric cards, no Inter headings. Instead: Sora variable display typography with tracking-tight, deep obsidian surface (#090D14) tinted with cool steel, high-precision telemetry grid lines (1px crisp borders at border-white/10), tactical deliverability health gauges (electric emerald #10B981, laser cyan #06B6D4, alert amber #F59E0B, hot crimson #EF4444), and editorial Swiss asymmetry."
+  },
+  "typography": {
+    "fonts": {
+      "heading": "Sora Variable",
+      "body": "Plus Jakarta Sans Variable",
+      "mono": "JetBrains Mono Variable"
+    },
+    "fontsource_imports": [
+      "@import \"@fontsource-variable/sora\";",
+      "@import \"@fontsource-variable/plus-jakarta-sans\";",
+      "@import \"@fontsource-variable/jetbrains-mono\";"
+    ],
+    "scale_px": {
+      "display": 60,
+      "h1": 48,
+      "h2": 36,
+      "h3": 24,
+      "h4": 20,
+      "body": 16,
+      "caption": 14,
+      "mono_data": 13
+    },
+    "typesetting_rules": {
+      "display_hero": "text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.08] font-['Sora_Variable',sans-serif]",
+      "section_h2": "text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight leading-tight font-['Sora_Variable',sans-serif]",
+      "widget_h3": "text-lg sm:text-xl font-semibold tracking-tight text-white",
+      "kpi_value": "text-2xl sm:text-3xl font-mono font-bold tracking-tight text-white",
+      "body_regular": "text-sm sm:text-base font-normal leading-relaxed text-slate-300 font-['Plus_Jakarta_Sans_Variable',sans-serif]",
+      "telemetry_label": "text-xs font-mono uppercase tracking-[0.18em] text-slate-400",
+      "badge_text": "text-xs font-semibold tracking-wide"
+    }
+  },
   "colors": {
+    "accent": "#06B6D4",
+    "on_accent": "#041B24",
     "surfaces": [
       {
         "name": "page",
         "kind": "solid",
-        "bg": "#0B0F17",
+        "bg": "#070A0F",
         "on_bg": "#F8FAFC",
         "on_bg_muted": "#94A3B8",
         "roles": {
-          "border": "#1E293B",
           "link": "#38BDF8",
           "error": "#F87171",
           "success": "#34D399",
@@ -23,48 +56,48 @@
       {
         "name": "panel",
         "kind": "solid",
-        "bg": "#111827",
-        "on_bg": "#F9FAFB",
-        "on_bg_muted": "#9CA3AF",
-        "roles": {
-          "border": "#1F2937",
-          "badge_bg": "#1E293B",
-          "badge_text": "#E2E8F0"
-        }
-      },
-      {
-        "name": "sidebar",
-        "kind": "solid",
-        "bg": "#090D14",
+        "bg": "#0D131F",
         "on_bg": "#F1F5F9",
-        "on_bg_muted": "#64748B",
+        "on_bg_muted": "#94A3B8",
         "roles": {
-          "active_bg": "#1E293B",
-          "active_text": "#38BDF8",
-          "border": "#1E293B"
+          "border": "#1E293B",
+          "hover_bg": "#141D2E",
+          "active_border": "#06B6D4"
         }
       },
       {
-        "name": "card_subtle",
+        "name": "card_elevated",
         "kind": "solid",
-        "bg": "#161F30",
+        "bg": "#111A2B",
         "on_bg": "#FFFFFF",
         "on_bg_muted": "#94A3B8"
       },
       {
-        "name": "inverse",
+        "name": "sidebar_nav",
         "kind": "solid",
-        "bg": "#F8FAFC",
-        "on_bg": "#0B0F17",
-        "on_bg_muted": "#475569"
+        "bg": "#090E17",
+        "on_bg": "#E2E8F0",
+        "on_bg_muted": "#64748B"
       },
       {
-        "name": "hero",
-        "kind": "gradient",
-        "contrast_against": "#0B0F17",
-        "guarantee": "solid dark background with radial blue-indigo specular highlight and 50% opacity subtle dot matrix grid",
+        "name": "hero_glass",
+        "kind": "glass",
+        "contrast_against": "#070A0F",
+        "guarantee": "backdrop-blur-2xl bg-black/60 border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)]",
         "on_bg": "#FFFFFF",
         "on_bg_muted": "#94A3B8",
+        "roles": {
+          "badge_bg": "#06B6D4/15",
+          "badge_text": "#38BDF8"
+        }
+      },
+      {
+        "name": "hero_image_backdrop",
+        "kind": "image",
+        "contrast_against": "#0A101D",
+        "guarantee": "scrim: linear-gradient(180deg, rgba(7,10,15,0.85) 0%, rgba(7,10,15,0.7) 50%, rgba(7,10,15,0.95) 100%)",
+        "on_bg": "#FFFFFF",
+        "on_bg_muted": "#CBD5E1",
         "roles": {
           "link": "#38BDF8",
           "error": "#F87171",
@@ -72,123 +105,310 @@
         }
       },
       {
-        "name": "badge_interested",
+        "name": "health_gauge_high",
         "kind": "solid",
         "bg": "#064E3B",
         "on_bg": "#A7F3D0",
         "on_bg_muted": "#6EE7B7"
       },
       {
-        "name": "badge_meeting_booked",
+        "name": "health_gauge_mid",
         "kind": "solid",
-        "bg": "#1E1B4B",
-        "on_bg": "#C7D2FE",
-        "on_bg_muted": "#818CF8"
+        "bg": "#78350F",
+        "on_bg": "#FDE68A",
+        "on_bg_muted": "#FCD34D"
       },
       {
-        "name": "badge_not_interested",
+        "name": "health_gauge_low",
+        "kind": "solid",
+        "bg": "#7F1D1D",
+        "on_bg": "#FECACA",
+        "on_bg_muted": "#FCA5A5"
+      },
+      {
+        "name": "spam_gate_clean",
+        "kind": "solid",
+        "bg": "#022C22",
+        "on_bg": "#34D399",
+        "on_bg_muted": "#A7F3D0"
+      },
+      {
+        "name": "spam_gate_alert",
         "kind": "solid",
         "bg": "#450A0A",
-        "on_bg": "#FECACA",
-        "on_bg_muted": "#F87171"
-      },
-      {
-        "name": "badge_ooo",
-        "kind": "solid",
-        "bg": "#451A03",
-        "on_bg": "#FED7AA",
-        "on_bg_muted": "#FB923C"
+        "on_bg": "#F87171",
+        "on_bg_muted": "#FECACA"
       }
-    ],
-    "accent": "#2563EB",
-    "accent_hover": "#1D4ED8",
-    "on_accent": "#FFFFFF",
-    "highlight_cyan": "#06B6D4",
-    "highlight_emerald": "#10B981"
-  },
-  "typography": {
-    "font_heading": "'Plus Jakarta Sans Variable', sans-serif",
-    "font_body": "'Inter Variable', sans-serif",
-    "font_mono": "'JetBrains Mono Variable', monospace",
-    "font_import_statements": [
-      "@import \"@fontsource-variable/plus-jakarta-sans\";",
-      "@import \"@fontsource-variable/inter\";",
-      "@import \"@fontsource-variable/jetbrains-mono\";"
-    ],
-    "scale_px": {
-      "display": 56,
-      "h1": 42,
-      "h2": 32,
-      "h3": 22,
-      "h4": 18,
-      "body": 15,
-      "caption": 13
-    },
-    "letter_spacing": {
-      "headings": "-0.03em",
-      "labels": "0.06em",
-      "body": "-0.01em"
-    }
+    ]
   },
   "entry_surfaces": {
-    "/": "split hero — brand positioning + live sending simulator left, interactive deliverability & campaign preview matrix right",
-    "/login": "branded split auth — value pillar panel with deliverability stats left, credential login form right",
-    "/signup": "branded split auth — quick onboarding banner left, account setup + initial sender setup wizard right",
-    "/dashboard": "high-density 4-metric KPI ribbon top, 14-day outreach volume/open/reply trend chart center, recent high-intent inbox replies right",
-    "/campaigns": "tactical campaign fleet table with real-time launch status, progress bars, open/click/reply metrics, and one-click launch drawer",
-    "/campaigns/:id": "multi-tab operational command: Overview analytics, Leads table with CSV upload parser, Multi-step Sequence Builder with variable insertion, and Sender Rotation & Schedule settings",
-    "/inbox": "3-pane Master Unibox: categorized intent folders left (All, Interested, Meeting Booked, Not Interested, OOO), message thread stream middle, conversational thread viewer with quick reply composer right",
-    "/senders": "connected sender inboxes matrix with health gauges, daily quota dials, SMTP/IMAP testing modal, and warm-up ramp tracker",
-    "/analytics": "comprehensive performance analytics with date-range filters, step-by-step conversion funnel, and per-campaign comparative ROI matrix"
-  },
-  "image_urls": {
-    "founder_testimonials": [
-      {
-        "url": "https://images.unsplash.com/photo-1534399315465-2b91232de345?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwxfHx0ZWNobm9sb2d5JTIwZm91bmRlciUyMHBvcnRyYWl0fGVufDB8fHx8MTc5MTczOTg5MXww&ixlib=rb-4.1.0&q=85",
-        "description": "Arjun Mehta, Founder at Scalr B2B (used in testimonial cards on landing page)"
-      },
-      {
-        "url": "https://images.unsplash.com/photo-1622124549569-734d5a66859d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwzfHx0ZWNobm9sb2d5JTIwZm91bmRlciUyMHBvcnRyYWl0fGVufDB8fHx8MTc5MTczOTg5MXww&ixlib=rb-4.1.0&q=85",
-        "description": "Vikram Patel, VP of Growth at HyperSend (used in social proof strip)"
-      },
-      {
-        "url": "https://images.unsplash.com/photo-1607990281513-2c110a25bd8c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwyfHx0ZWNobm9sb2d5JTIwZm91bmRlciUyMHBvcnRyYWl0fGVufDB8fHx8MTc5MTczOTg5MXww&ixlib=rb-4.1.0&q=85",
-        "description": "Marcus Vance, Outbound Agency Principal (used in agency scale section)"
-      }
-    ],
-    "workspace_context": [
-      {
-        "url": "https://images.unsplash.com/photo-1556761175-4b46a572b786?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBtb2Rlcm4lMjBvZmZpY2UlMjB3b3Jrc3BhY2UlMjB0ZWFtfGVufDB8fHx8MTc5MTczOTg5MXww&ixlib=rb-4.1.0&q=85",
-        "description": "High performance sales team operating automated outreach infrastructure"
-      }
-    ]
-  },
-  "layout_and_grids": {
-    "app_shell": "Two-level layout: persistent sleek sidebar navigation (w-64 on desktop, collapsible to w-18 icon mode or mobile sheet) + top utility bar (workspace selector, notifications, demo seed reset, quick action 'New Campaign') + scrollable viewport area (px-6 py-6 max-w-7xl mx-auto).",
-    "dashboard_grid": "Top grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 for metrics; Middle grid-cols-1 lg:grid-cols-12 gap-6 where 8 cols host Recharts outreach performance and 4 cols host the real-time Master Inbox reply stream; Bottom grid-cols-1 lg:grid-cols-12 gap-6 for Active Campaigns roster and Sender Health breakdown.",
-    "master_inbox_grid": "3-column fixed layout: Left 240px folder/sentiment filter list; Middle 360px thread snippet feed with unread indicators and badge chips; Right flex-1 deep message conversation pane with contact metadata sidebar and inline rich reply composer.",
-    "campaign_detail_tabs": "Tabs: 1. Overview (charts, open/click funnels, quick stats), 2. Leads (CSV drag-and-drop importer, search/filter, lead status tags), 3. Sequence (step-by-step email builder with delay timers, variable pills {first_name}, {company}, {title}, A/Z fallback preview), 4. Settings (Sender mailbox pool rotation, daily send pacing, tracking toggles)."
+    "/": "Hero grid split: high-impact value proposition + real-time delivery telemetry engine visualization left, live multi-inbox rotation & spam health interactive simulator right",
+    "/login": "Branded split auth: high-converting deliverability proof terminal left, clean high-security signin form with one-click demo credentials right",
+    "/register": "Branded split signup: 14-day zero-burn deliverability trial highlight left, rapid team onboarding registration form right"
   },
   "motion": {
-    "engine": "tw-animate-css and Tailwind transition utilities",
-    "rules": [
-      "Use specific transitions: 'transition-colors duration-150', 'transition-transform duration-200 ease-out'",
-      "Hover lift on interactive cards: 'hover:-translate-y-0.5 hover:shadow-lg hover:border-slate-700'",
-      "Tab transitions: quick cross-fade with 'animate-fadeIn duration-200'",
-      "Badge pulsing on 'Active' campaign runs: subtle emerald status indicator 'animate-pulse'",
-      "Honor prefers-reduced-motion: disable translate effects with motion-reduce:transform-none"
-    ]
+    "library": "motion (from 'motion/react' bundled) + CSS keyframes in index.css",
+    "vocabulary": [
+      {
+        "name": "pulse-glow",
+        "usage": "Sending health radar dots, active inbox rotation pulsing indicator",
+        "spec": "animation: pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;"
+      },
+      {
+        "name": "radar-sweep",
+        "usage": "Spam score analyzer scan line and warmup engine radar sweep",
+        "spec": "transform: translateY(-100%); transition: transform 1.2s ease-in-out;"
+      },
+      {
+        "name": "telemetry-counter",
+        "usage": "Dashboard KPI numbers counter animation on initial view",
+        "spec": "motion.span with layoutId and spring damping: 25, stiffness: 200"
+      },
+      {
+        "name": "row-slide-up",
+        "usage": "Activity log stream item entrance and inbox thread updates",
+        "spec": "initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.25 }"
+      },
+      {
+        "name": "interactive-card-hover",
+        "usage": "Landing page feature bento items and Dashboard KPI cards",
+        "spec": "hover: -translate-y-1 hover:border-cyan-500/40 hover:shadow-[0_12px_32px_rgba(6,182,212,0.12)] transition-all duration-200"
+      }
+    ],
+    "reduced_motion": "Wrap key animations in @media (prefers-reduced-motion: reduce) or MotionConfig reducedMotion='user'"
+  },
+  "grids_and_layouts": {
+    "landing_page": {
+      "hero_layout": "Tetris grid with 12 cols: 7 cols main copy + interactive CTA + live status ticker, 5 cols live interactive Inbox Health & Spintax Simulator widget",
+      "feature_bento_grid": "12-col high-contrast bento: Feature 1 (Multi-Inbox Rotation + 14d health, 8 cols), Feature 2 (Spam Score Live Gate, 4 cols), Feature 3 (Humanisation Pack & Jitter, 4 cols), Feature 4 (AI Master Inbox Auto-Labeling, 8 cols), Feature 5 (Priority Queue Bias Slider, 6 cols), Feature 6 (A/B Test Winner Auto-Select, 6 cols)",
+      "social_proof_bar": "Editorial marquee ribbon with 6 tier-1 enterprise cold-outreach agencies & high-volume SDR teams"
+    },
+    "app_cockpit_layout": {
+      "structure": "Collapsible tactical sidebar (w-64 desktop, sheet on mobile) + sticky crystal glass topbar with Live Sending Status Indicator + Quick Campaign Launcher + dynamic breadcrumbs",
+      "kpi_bar": "4 to 5 compact high-density metric widgets with 14-day micro sparklines, delta badges, and goal progress bars",
+      "data_tables": "Dense zebra-tinted rows with hover highlight, sticky action headers, inline tag pills, and instant lead history timeline drawer"
+    }
+  },
+  "page_blueprints": {
+    "landing_page": {
+      "route": "/",
+      "narrative": "Position OutreachForge as the $100K enterprise cold outreach platform that replaces fragmented stacks (Smartlead + Instantly + warmup tools) with mathematical deliverability certainty.",
+      "sections_in_order": [
+        {
+          "id": "hero",
+          "title": "Cold Email Engine Built for 99.4% Inbox Placement",
+          "subtitle": "Stop burning domains. Connect 100+ Gmail & SMTP inboxes, randomize send jitter, auto-gate high spam scores, and let AI triage every reply into booked revenue.",
+          "interactive_widget": "Interactive Live Deliverability Cockpit: allows visitors to toggle 'Humanisation Mode', drag the 'Follow-up Priority' slider, and see simulated Spam Score drop from 68 to 12 with 1-click fixes.",
+          "primary_cta": "Launch Free Campaign -> /signup",
+          "secondary_cta": "Explore Live Demo Sandbox -> /login"
+        },
+        {
+          "id": "proof_ticker",
+          "title": "Trusted by 1,400+ High-Volume Outbound Teams & Agencies",
+          "metrics": "24.8M+ cold emails routed monthly | 0.42% global bounce rate | 8.4x reply rate boost with AI spintax"
+        },
+        {
+          "id": "core_features_bento",
+          "title": "The $100K Infrastructure Advantage",
+          "items": [
+            {
+              "badge": "DELIVERABILITY ARMOR",
+              "title": "Multi-Inbox Sender Rotation & Sending Health (0–100)",
+              "desc": "Smartly load balances cold email bursts across all connected mailboxes. Automatically calculates 14-day bounce/reply curves and stops burning mailboxes before domains get blacklisted.",
+              "icon": "ShieldCheck"
+            },
+            {
+              "badge": "PRE-FLIGHT GATEWAY",
+              "title": "Live Spam Score Gauge & 1-Click Auto-Fixes",
+              "desc": "Analyzes trigger words, link-to-text ratios, missing SPF/DKIM flags, and spintax entropy. Hard gates campaign launch until email copy is guaranteed inbox-ready.",
+              "icon": "Gauge"
+            },
+            {
+              "badge": "REVENUE TRIAGE",
+              "title": "Master Unified Inbox with AI Auto-Labels",
+              "desc": "One unified stream for all domains. OpenAI categorizes replies instantly into Interested, Meeting Booked, Out of Office, or Wrong Person with automated follow-up halts.",
+              "icon": "Inbox"
+            },
+            {
+              "badge": "HUMAN COCKPIT",
+              "title": "Humanisation Pack & Dynamic Jitter Engine",
+              "desc": "Plain-text mode, smart 'Re:' thread threading, randomized millisecond send gaps, timezone-aware business hour constraints, and custom preheaders.",
+              "icon": "UserCheck"
+            },
+            {
+              "badge": "AI GENERATIVE COPY",
+              "title": "Rewrite with AI & Spintax Multiplier",
+              "desc": "Transform static pitches into 20+ spintax variants with customizable Tone, Goal, and Length parameters directly inside the step editor.",
+              "icon": "Sparkles"
+            },
+            {
+              "badge": "SMART QUEUE BIAS",
+              "title": "Follow-Up Priority Queue Slider",
+              "desc": "Re-bias the scheduler queue dynamically between hunting new leads and closing high-intent follow-up steps with zero downtime.",
+              "icon": "Sliders"
+            }
+          ]
+        },
+        {
+          "id": "how_it_works",
+          "title": "4 Steps from Cold Lead to Booked Calendar",
+          "steps": [
+            "1. Connect Inboxes (Google, Outlook, Custom SMTP) & Set Daily Caps",
+            "2. Import & Dedupe Leads via CSV with Automated Tag Mapping",
+            "3. Build Sequence with A/B Subject Lines & Live Spam Gate Check",
+            "4. Monitor Real-Time Reply Stream in Unified Master Inbox"
+          ]
+        },
+        {
+          "id": "interactive_roi_calculator",
+          "title": "Deliverability Math vs Legacy Platforms",
+          "content": "Compare cost & inbox placement of 50 inboxes on OutreachForge vs $400/mo fragmented tools."
+        },
+        {
+          "id": "final_cta",
+          "title": "Start Crushing Inboxes Today",
+          "desc": "Self-hosted privacy, unlimited sender rotation, zero per-seat tax."
+        }
+      ]
+    },
+    "dashboard_home": {
+      "route": "/dashboard",
+      "layout": "High-density KPI Command Deck",
+      "components": [
+        "Global Sender Health Banner with aggregated 14-day bounce rate (< 0.8% ideal)",
+        "KPI Grid: Total Sent (24h/14d), Open Rate (68.4%), Click Rate (14.2%), Reply Rate (9.8%), Bounce Rate (0.3%), Pipeline Generated ($482k)",
+        "14-Day Delivery & Response Volume Chart with interactive Recharts area graph",
+        "Active Campaigns Quick-Control Table with real-time status toggles, progress bars, and reply counters",
+        "Live Activity Feed Drawer with real-time send countdowns and inbox dispatch logs"
+      ]
+    },
+    "campaigns_list": {
+      "route": "/campaigns",
+      "layout": "Filterable Campaign Matrix",
+      "components": [
+        "Search + Status filter (All, Active, Paused, Draft, Completed)",
+        "Campaign Cards / Dense Table with: Name, Status Badge, Inboxes attached, Leads total, Sent progress, Open %, Reply %, Winner A/B tag, and Quick Actions (Pause, Edit, Analytics, Duplicate, Delete)",
+        "New Campaign Modal with 3-step rapid wizard"
+      ]
+    },
+    "campaign_detail": {
+      "route": "/campaigns/:id",
+      "layout": "Deep Tabbed Cockpit (Overview, Leads, Sequence, Settings, Analytics)",
+      "tabs": {
+        "overview": "Daily performance graph, Step-by-step funnel drop-off bar, A/B variant win rate leaderboard, and Quick send schedule toggle",
+        "leads": "Lead list table with Status pills (New, Sent, Opened, Clicked, Replied, Bounced), Search & Filter bar, CSV Import with dedupe column mapper, CSV Export, and Clickable row opening 'Lead History Timeline Dialog' showing chronological touchpoint history with timestamps and email preview",
+        "sequence": "Visual multi-step email builder. Step card with: Day delay, Subject line (A/B testing with + Variant button), Spintax syntax helper ({first_name} | {Hi|Hey|Hello}), AI 'Rewrite with AI' drawer (Tone, Goal, Length dropdowns), Live Spam Score Gauge (0-100) with warning triggers and 1-Click Auto-Fixes, Plain-Text toggle, and Preheader field",
+        "settings": "Sender Inboxes multi-select picker with daily cap overrides, Sending Schedule calendar & timezone selector, Gap between sends (seconds + jitter), Random daily start time, Humanisation Pack toggles, and the 'Follow-up Priority Slider' (New Leads ↔ Follow-ups queue bias)"
+      }
+    },
+    "sender_accounts": {
+      "route": "/senders",
+      "layout": "Mission Control Inbox Telemetry",
+      "components": [
+        "Workspace Default Signature Card with WYSIWYG editor and 'Apply to all inboxes' button + per-inbox override badge",
+        "Sender Inboxes Table with: Email Address, Provider Icon (Google, Outlook, SMTP), Daily Send Limit (with quick slider), Sending Health Score (0-100 ring with color threshold), 14-day Sent / Bounced / Replied metrics, IMAP Sync Status, Warmup state, and Action menu (Test Connection, Edit Signature, Re-authenticate, Delete)",
+        "Add Inbox Dialog supporting OAuth and Custom SMTP/IMAP credentials with instant validation test"
+      ]
+    },
+    "master_inbox": {
+      "route": "/inbox",
+      "layout": "3-Pane Unified Stream (Inspired by Superhuman & Smartlead)",
+      "components": [
+        "Left Pane (Thread List): Filter by AI Label (All, Interested, Meeting Booked, Not Interested, Out of Office, Wrong Person), Campaign, or Inbox. Shows snippet, sentiment pill, and timestamp",
+        "Middle Pane (Conversation Thread): Chronological email exchange showing original cold email + prospect reply, with quick Reply Composer, Template inserts, and AI Suggested Reply generator",
+        "Right Pane (Lead Intelligence Card): Lead details, Company, Campaign origin, Email history timeline, AI Sentiment tag switcher, CRM Sync button, and 'Stop Sequence for Lead' toggle"
+      ]
+    },
+    "activity_log": {
+      "route": "/activity",
+      "layout": "Real-time Sending Telemetry Stream",
+      "components": [
+        "Next-10 Scheduled Sends Queue with live countdown clocks (e.g. 'Sending in 00:02:41 via alex@outreach.co')",
+        "Live Execution Stream Table with Event Type, Sender Inbox, Lead Email, Campaign Name, Status (Dispatched, Opened, Clicked, Replied), and Millisecond Jitter Offset"
+      ]
+    },
+    "analytics_page": {
+      "route": "/analytics",
+      "layout": "Global Outbound Intelligence Suite",
+      "components": [
+        "Date Range Selector (Last 7d, 14d, 30d, All Time)",
+        "Aggregated Metrics: Total Deliverability Rate, Open Curve by Hour of Day, Best Performing Subject Lines, Domain Reputation Matrix, and Step Funnel Retention Heatmap"
+      ]
+    },
+    "auth_pages": {
+      "login": {
+        "route": "/login",
+        "layout": "Split Branded Cockpit with Demo Account Autofill helper buttons"
+      },
+      "signup": {
+        "route": "/signup",
+        "layout": "Split Branded Onboarding with Team Workspace Name and Initial Inboxes setup"
+      }
+    }
+  },
+  "signature_components": {
+    "kpi_card": {
+      "container": "relative overflow-hidden rounded-xl border border-slate-800 bg-[#0D131F]/90 p-5 backdrop-blur-sm transition-all duration-200 hover:border-cyan-500/40 hover:shadow-[0_8px_24px_rgba(6,182,212,0.1)]",
+      "accent_line": "absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent",
+      "badge": "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-mono font-medium"
+    },
+    "spam_score_gauge": {
+      "container": "rounded-xl border border-slate-800 bg-[#0A101C] p-4 flex flex-col gap-3",
+      "score_bar": "h-2 w-full rounded-full bg-slate-800 overflow-hidden",
+      "auto_fix_btn": "inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/25 transition-colors"
+    },
+    "health_score_ring": {
+      "score_90_plus": "border-emerald-500 text-emerald-400 bg-emerald-950/40",
+      "score_70_89": "border-amber-500 text-amber-400 bg-amber-950/40",
+      "score_below_70": "border-rose-500 text-rose-400 bg-rose-950/40"
+    },
+    "lead_timeline_dialog": {
+      "drawer_wrapper": "max-w-2xl bg-[#0B111D] border-slate-800 text-slate-100",
+      "timeline_item": "relative pl-6 pb-6 border-l-2 border-slate-800 last:border-l-transparent",
+      "timeline_dot": "absolute -left-[9px] top-0 h-4 w-4 rounded-full border-2 bg-[#0B111D]"
+    },
+    "ai_rewrite_modal": {
+      "container": "rounded-2xl border border-cyan-500/30 bg-[#0D1524] p-6 shadow-2xl backdrop-blur-xl"
+    }
+  },
+  "media": {
+    "image_urls": {
+      "hero_cyber_backdrop": {
+        "url": "https://images.unsplash.com/photo-1639066648921-82d4500abf1a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2MzR8MHwxfHNlYXJjaHwyfHxjeWJlciUyMHNlY3VyaXR5JTIwc2VydmVyJTIwcm9vbSUyMGRhcmslMjBibHVlfGVufDB8fHx8MTc5MTgwODQ2OHww&ixlib=rb-4.1.0&q=85",
+        "description": "Large array of high-tech data infrastructure lights in dark blue atmosphere, for subtle hero backdrop texture with scrim",
+        "category": "hero_background"
+      },
+      "server_cluster_texture": {
+        "url": "https://images.unsplash.com/photo-1561233835-f937539b95b9?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2MzR8MHwxfHNlYXJjaHwzfHxjeWJlciUyMHNlY3VyaXR5JTIwc2VydmVyJTIwcm9vbSUyMGRhcmslMjBibHVlfGVufDB8fHx8MTc5MTgwODQ2OHww&ixlib=rb-4.1.0&q=85",
+        "description": "Server cluster telemetry lights for security and deliverability proof section",
+        "category": "infrastructure_proof"
+      },
+      "team_collaboration_1": {
+        "url": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTJ8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjB0ZWNoJTIwc3RhcnR1cCUyMHRlYW0lMjBhbmFseXRpY3N8ZW58MHx8fHwxNzkxODA4NDY4fDA&ixlib=rb-4.1.0&q=85",
+        "description": "High-velocity outbound sales team analyzing campaign data on laptops",
+        "category": "social_proof_testimonials"
+      },
+      "team_collaboration_2": {
+        "url": "https://images.unsplash.com/photo-1557804506-669a67965ba0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTJ8MHwxfHNlYXJjaHwyfHxtb2Rlcm4lMjB0ZWNoJTIwc3RhcnR1cCUyMHRlYW0lMjBhbmFseXRpY3N8ZW58MHx8fHwxNzkxODA4NDY4fDA&ixlib=rb-4.1.0&q=85",
+        "description": "SDR strategy session planning enterprise email sequences",
+        "category": "agency_case_studies"
+      }
+    }
   },
   "accessibility": {
-    "contrast_standard": "All text tokens exceed WCAG AA 4.5:1 against dark base backgrounds #0B0F17, #111827 and #161F30",
-    "test_attributes": "All buttons, inputs, links, tabs, dialog triggers, and metrics MUST feature data-testid attributes (e.g., data-testid='create-campaign-button', data-testid='sender-test-connection-button', data-testid='csv-file-input', data-testid='kpi-open-rate')",
-    "keyboard_nav": "Full dialogs, popovers, and selects use @base-ui primitives which handle focus traps and escape key dismissal natively"
+    "wcag_level": "WCAG AA (APCA high compliance)",
+    "rules": [
+      "All normal text has minimum 4.5:1 contrast ratio against composite dark backgrounds",
+      "Interactive controls have explicit focus-visible rings (focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950)",
+      "Every button, input, tab, dialog trigger, and data action carries role-based data-testid attributes",
+      "Motion respects prefers-reduced-motion media query"
+    ]
   },
   "instructions_to_main_agent": [
-    "1. Replace index.css theme fonts and colors with Plus Jakarta Sans (headings) + Inter (body) + JetBrains Mono (monospaced metrics/code/tokens).",
-    "2. Build the complete suite of cold outreach SaaS pages in frontend/src/pages: Landing (Home.tsx), Login (Login.tsx), Signup (Signup.tsx), Dashboard (Dashboard.tsx), Campaigns (Campaigns.tsx), CampaignDetail (CampaignDetail.tsx), MasterInbox (MasterInbox.tsx), SenderAccounts (SenderAccounts.tsx), Analytics (Analytics.tsx).",
-    "3. Add all routes cleanly in frontend/src/App.tsx with persistent navigation when inside the authenticated app shell.",
-    "4. Ensure realistic seed data and robust mock/fallback data so all tables, charts, sequences, inbox threads, and sender accounts render rich, actionable UI even when static or offline.",
-    "5. Include interactive workflows: Add Sender Account modal with SMTP/IMAP testing simulation, CSV lead import parser with table preview, Email Sequence step adder with {first_name} badge inserters, Campaign status toggle (Active/Paused), Master Inbox reply sender with instant thread update, and 14-day Recharts charts with open/click/reply toggles."
+    "1. Replace font imports in index.css with Sora Variable and Plus Jakarta Sans Variable. Update --font-sans and --font-heading tokens.",
+    "2. Implement the $100K high-ticket cockpit feel with dark obsidian surfaces (#070A0F, #0D131F), 1px crisp borders (border-slate-800), and vibrant deliverability accents (cyan-400, emerald-400, amber-400).",
+    "3. On the Landing page (/), feature all core engineering highlights: Multi-Inbox Sender Rotation + 14d health score, Spam Score Live Gauge with 1-click auto fixes, AI Master Inbox auto-labels, Humanisation Pack (jitter/plain text), Follow-up Priority slider, and A/B test winner auto-selection.",
+    "4. Ensure all interactive features in the dashboard (Spam Score gauge, Lead history timeline dialog, Rewrite with AI drawer, Follow-up slider, CSV import/export, Signature editor) have rich stateful UI with smooth micro-animations and zero blank states.",
+    "5. Use Sonner for notifications and keep data-testid attributes intact on all interactive elements."
   ]
 }

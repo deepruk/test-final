@@ -1,11 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Flame, Loader2, MoreHorizontal, Pause, Play, Plug, Plus, Server, SlidersHorizontal, Trash2, XCircle } from "lucide-react";
+import { Activity, CheckCircle2, Copy, Heart, Loader2, MoreHorizontal, Pause, Play, Plug, Plus, Server, SlidersHorizontal, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
-import type { ConnectionTest, Sender, SenderIn, SenderUpdate } from "@/lib/types";
-import { Switch } from "@/components/ui/switch";
+import type { ConnectionTest, Sender, SenderIn, SenderUpdate, User, WorkspaceUpdate } from "@/lib/types";
 import { SENDER_STATUS, errMsg, fmt, timeAgo } from "@/lib/format";
 import AppShell, { PageHeader } from "@/components/AppShell";
 import { EmptyState, Pill, RateBar, StatCard } from "@/components/ui-kit";
@@ -26,58 +25,53 @@ const PRESETS: Record<string, Partial<SenderIn> & { label: string; hint: string 
 
 const EMPTY: SenderIn = {
   email: "", from_name: "", smtp_host: "smtp.gmail.com", smtp_port: 587, smtp_security: "starttls", smtp_user: "", smtp_pass: "",
-  imap_host: "imap.gmail.com", imap_port: 993, imap_user: "", imap_pass: "", daily_limit: 40,
-  warmup_enabled: true, warmup_start: 5, warmup_increment: 3, signatures: [],
+  imap_host: "imap.gmail.com", imap_port: 993, imap_user: "", imap_pass: "", daily_limit: 40, signatures: [],
 };
 
-function WarmupFields({ v, onChange, idPrefix }: {
-  v: { daily_limit: number; warmup_enabled: boolean; warmup_start: number; warmup_increment: number };
-  onChange: (p: Partial<{ daily_limit: number; warmup_enabled: boolean; warmup_start: number; warmup_increment: number }>) => void; idPrefix: string;
-}) {
-  const days = v.warmup_enabled ? Math.max(1, Math.ceil((v.daily_limit - v.warmup_start) / Math.max(1, v.warmup_increment)) + 1) : 0;
+// Sending health visuals ---------------------------------------------------
+function healthTone(score: number): { color: string; dot: string; label: string } {
+  if (score >= 85) return { color: "text-emerald-300", dot: "bg-emerald-400", label: "Excellent" };
+  if (score >= 65) return { color: "text-cyan", dot: "bg-cyan-400", label: "Healthy" };
+  if (score >= 40) return { color: "text-amber-300", dot: "bg-amber-400", label: "Watch" };
+  return { color: "text-red-300", dot: "bg-red-400", label: "At risk" };
+}
+
+function SendingHealthBadge({ s }: { s: Sender }) {
+  const t = healthTone(s.sending_health);
+  const tip = s.sent_14d
+    ? `Last 14 days: ${s.sent_14d} sent · ${s.bounce_rate_14d}% bounced · ${s.reply_rate_14d}% replied`
+    : "No sends yet in the last 14 days — neutral score";
   return (
-    <fieldset className="space-y-3 rounded-lg border border-orange-500/20 bg-orange-500/[0.03] p-4" data-testid={`${idPrefix}-warmup-fieldset`}>
-      <label className="flex cursor-pointer items-center justify-between gap-4">
-        <div>
-          <p className="flex items-center gap-1.5 text-sm font-medium text-foreground"><Flame className="size-4 text-orange-400" />Warm-up ramp</p>
-          <p className="text-xs text-muted-foreground">Start low and raise the daily cap each day to build sender reputation.</p>
-        </div>
-        <Switch checked={v.warmup_enabled} onCheckedChange={(c) => onChange({ warmup_enabled: c })} data-testid={`${idPrefix}-warmup-switch`} />
-      </label>
-      {v.warmup_enabled && (
-        <>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5"><Label>Start at (emails/day)</Label><Input type="number" min={1} value={v.warmup_start} onChange={(e) => onChange({ warmup_start: Math.max(1, Number(e.target.value) || 1) })} data-testid={`${idPrefix}-warmup-start-input`} /></div>
-            <div className="space-y-1.5"><Label>Increase per day</Label><Input type="number" min={1} value={v.warmup_increment} onChange={(e) => onChange({ warmup_increment: Math.max(1, Number(e.target.value) || 1) })} data-testid={`${idPrefix}-warmup-increment-input`} /></div>
-          </div>
-          <p className="text-xs text-muted-foreground" data-testid={`${idPrefix}-warmup-summary`}>
-            Day 1: {Math.min(v.warmup_start, v.daily_limit)}/day → reaches the full {v.daily_limit}/day on day {days}.
-          </p>
-        </>
-      )}
-    </fieldset>
+    <div className="rounded-lg border border-border bg-background p-3" data-testid={`sender-health-${s.id}`}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          <Activity className="size-3" /> Sending health
+        </span>
+        <span className={`font-mono text-base font-semibold ${t.color}`} data-testid={`sender-health-score-${s.id}`}>{s.sending_health}</span>
+      </div>
+      <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted">
+        <div className={`h-full ${t.dot} transition-all`} style={{ width: `${s.sending_health}%` }} />
+      </div>
+      <p className="mt-1.5 text-[11px] text-muted-foreground">{tip}</p>
+    </div>
   );
 }
 
 function EditLimitsDialog({ sender, onClose }: { sender: Sender | null; onClose: () => void }) {
   const qc = useQueryClient();
-  const [v, setV] = useState({ daily_limit: 40, warmup_enabled: false, warmup_start: 5, warmup_increment: 3, from_name: "", signatures: "" });
+  const [v, setV] = useState({ daily_limit: 40, from_name: "", signatures: "" });
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   if (sender && loadedFor !== sender.id) {
     setLoadedFor(sender.id);
-    setV({ daily_limit: sender.daily_limit, warmup_enabled: sender.warmup_enabled, warmup_start: sender.warmup_start, warmup_increment: sender.warmup_increment, from_name: sender.from_name, signatures: (sender.signatures ?? []).join("\n---\n") });
+    setV({ daily_limit: sender.daily_limit, from_name: sender.from_name, signatures: (sender.signatures ?? []).join("\n---\n") });
   }
   const save = useMutation({
     mutationFn: () => {
       const sigs = v.signatures.split(/\n-{3,}\n/).map((x) => x.trim()).filter(Boolean).slice(0, 5);
-      const payload: SenderUpdate = {
-        from_name: v.from_name, daily_limit: v.daily_limit,
-        warmup_enabled: v.warmup_enabled, warmup_start: v.warmup_start, warmup_increment: v.warmup_increment,
-        signatures: sigs,
-      };
+      const payload: SenderUpdate = { from_name: v.from_name, daily_limit: v.daily_limit, signatures: sigs };
       return apiPatch<Sender>(`/senders/${sender?.id}`, payload);
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["senders"] }); toast.success("Sending limits saved"); onClose(); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["senders"] }); toast.success("Inbox settings saved"); onClose(); },
     onError: (e) => toast.error(errMsg(e)),
   });
   const sigCount = v.signatures.split(/\n-{3,}\n/).map((x) => x.trim()).filter(Boolean).length;
@@ -85,7 +79,7 @@ function EditLimitsDialog({ sender, onClose }: { sender: Sender | null; onClose:
     <Dialog open={!!sender} onOpenChange={(o) => { if (!o) { onClose(); setLoadedFor(null); } }}>
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-md scroll-thin" data-testid="edit-sender-dialog">
         <DialogHeader>
-          <DialogTitle>Sending limits</DialogTitle>
+          <DialogTitle>Inbox settings</DialogTitle>
           <DialogDescription className="font-mono">{sender?.email}</DialogDescription>
         </DialogHeader>
         <div className="my-4 space-y-4">
@@ -93,7 +87,6 @@ function EditLimitsDialog({ sender, onClose }: { sender: Sender | null; onClose:
             <div className="space-y-1.5"><Label>From name</Label><Input value={v.from_name} onChange={(e) => setV({ ...v, from_name: e.target.value })} data-testid="edit-sender-from-name-input" /></div>
             <div className="space-y-1.5"><Label>Max per day</Label><Input type="number" min={1} max={2000} value={v.daily_limit} onChange={(e) => setV({ ...v, daily_limit: Math.max(1, Number(e.target.value) || 1) })} data-testid="edit-sender-daily-limit-input" /></div>
           </div>
-          <WarmupFields v={v} onChange={(p) => setV({ ...v, ...p })} idPrefix="edit-sender" />
           <div className="space-y-1.5 rounded-lg border border-border bg-background p-4" data-testid="edit-sender-signatures-fieldset">
             <Label>Signatures <span className="font-normal text-muted-foreground">· 1–5, rotated per lead</span></Label>
             <Textarea
@@ -106,9 +99,9 @@ function EditLimitsDialog({ sender, onClose }: { sender: Sender | null; onClose:
             />
             <p className="text-xs text-muted-foreground">
               Separate signatures with a line of three dashes (<span className="font-mono">---</span>). Each lead keeps the same signature across follow-ups. <span className="font-mono text-foreground/75">{sigCount}</span> signature{sigCount === 1 ? "" : "s"} ready.
+              <br />Leave empty to inherit the <span className="font-mono text-foreground/80">workspace default signature</span>.
             </p>
           </div>
-          {sender?.warmup_enabled && <p className="text-xs text-muted-foreground">Turning warm-up off and on again restarts the ramp from day 1.</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} data-testid="edit-sender-cancel">Cancel</Button>
@@ -116,6 +109,85 @@ function EditLimitsDialog({ sender, onClose }: { sender: Sender | null; onClose:
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// -------- Workspace signature card -----------------------------------------
+function WorkspaceSignatureHint() {
+  const me = useQuery({ queryKey: ["me"], queryFn: () => apiGet<User>("/auth/me") });
+  const sig = (me.data?.default_signature || "").trim();
+  if (!sig) return null;
+  return (
+    <div className="rounded-lg border border-cyan-500/25 bg-cyan-500/[0.04] p-3 text-xs text-cyan-100/90" data-testid="workspace-signature-hint">
+      <p className="font-medium text-cyan">Workspace signature will be used</p>
+      <p className="mt-0.5 text-muted-foreground">This inbox will inherit the default signature below until you give it one of its own.</p>
+      <pre className="mt-2 whitespace-pre-wrap font-mono text-[11px] text-foreground/75">{sig}</pre>
+    </div>
+  );
+}
+
+function WorkspaceSignatureCard() {
+  const qc = useQueryClient();
+  const me = useQuery({ queryKey: ["me"], queryFn: () => apiGet<User>("/auth/me") });
+  const [sig, setSig] = useState<string | null>(null);
+  const [applyAll, setApplyAll] = useState(false);
+  const value = sig ?? me.data?.default_signature ?? "";
+  const dirty = me.data ? value !== (me.data.default_signature || "") : false;
+  const save = useMutation({
+    mutationFn: () => {
+      const payload: WorkspaceUpdate = { default_signature: value, apply_signature_to_all_inboxes: applyAll };
+      return apiPatch<User>("/auth/workspace", payload);
+    },
+    onSuccess: (u) => {
+      qc.setQueryData(["me"], u);
+      qc.invalidateQueries({ queryKey: ["senders"] });
+      toast.success(applyAll ? "Signature saved and applied to every inbox" : "Workspace signature saved");
+      setSig(u.default_signature);
+      setApplyAll(false);
+    },
+    onError: (e) => toast.error(errMsg(e)),
+  });
+  return (
+    <div className="mb-6 rounded-xl border border-border bg-panel p-5" data-testid="workspace-signature-card">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="flex items-center gap-1.5 font-heading text-sm font-semibold text-foreground">
+            <Copy className="size-4 text-cyan" /> Workspace default signature
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Appended automatically on any inbox that has no signatures of its own. One place to update every mailbox at once.
+          </p>
+        </div>
+      </div>
+      <Textarea
+        rows={5}
+        value={value}
+        onChange={(e) => setSig(e.target.value)}
+        placeholder={"Alex Morgan\nFounder, Northwind\nnorthwind.com"}
+        className="mt-4 font-mono text-[12px] leading-relaxed"
+        data-testid="workspace-signature-input"
+      />
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            className="size-3.5 accent-cyan-500"
+            checked={applyAll}
+            onChange={(e) => setApplyAll(e.target.checked)}
+            data-testid="workspace-signature-apply-all"
+          />
+          Also replace per-inbox signatures with this one
+        </label>
+        <Button
+          size="sm"
+          onClick={() => save.mutate()}
+          disabled={save.isPending || (!dirty && !applyAll)}
+          data-testid="workspace-signature-save"
+        >
+          {save.isPending && <Loader2 className="size-4 animate-spin" />} Save signature
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -216,7 +288,7 @@ function AddSenderDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
                 <div className="space-y-1.5 sm:col-span-3"><Label>Password</Label><Input type="password" value={f.imap_pass} onChange={(e) => set("imap_pass", e.target.value)} placeholder="Same as SMTP" data-testid="sender-imap-pass-input" /></div>
               </div>
             </fieldset>
-            <WarmupFields v={f} onChange={(p) => setF((prev) => ({ ...prev, ...p }))} idPrefix="sender" />
+            <WorkspaceSignatureHint />
             {result && <TestResult r={result} />}
           </div>
           <DialogFooter>
@@ -291,67 +363,105 @@ export default function SenderAccounts() {
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard testId="senders-kpi-total" label="Connected inboxes" value={fmt(list.length)} icon={Server} />
         <StatCard testId="senders-kpi-healthy" label="Healthy" value={`${healthy}/${list.length}`} icon={CheckCircle2} accent="text-emerald-300" />
-        <StatCard testId="senders-kpi-capacity" label="Daily capacity" value={fmt(cap)} sub={`emails / day · ${list.filter((s) => s.warmup_enabled && s.effective_limit < s.daily_limit).length} warming up`} />
+        <StatCard testId="senders-kpi-capacity" label="Daily capacity" value={fmt(cap)} sub="emails / day" />
         <StatCard testId="senders-kpi-today" label="Sent today" value={fmt(today)} sub={`${cap ? ((today / cap) * 100).toFixed(0) : 0}% of capacity`} />
       </div>
+
+      <WorkspaceSignatureCard />
 
       {senders.data && list.length === 0 ? (
         <EmptyState icon={Server} testId="senders-empty" title="Connect your first inbox" body="Add any Gmail, Outlook or custom-domain mailbox with SMTP + IMAP credentials."
           action={<Button onClick={() => setOpen(true)} data-testid="empty-add-sender-button"><Plus className="size-4" />Connect inbox</Button>} />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {list.map((s, i) => (
-            <div key={s.id} className="group rounded-xl border border-border bg-panel p-5 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-foreground/20 animate-fade-up" style={{ animationDelay: `${i * 50}ms` }} data-testid={`sender-card-${s.id}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate font-mono text-sm font-medium text-foreground">{s.email}</p>
-                  <p className="text-xs text-muted-foreground">{s.from_name || "—"} · {s.smtp_host}</p>
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger render={<Button variant="ghost" size="icon-xs" data-testid={`sender-menu-${s.id}`} />}>
-                    <MoreHorizontal className="size-4" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => test.mutate(s.id)} data-testid={`sender-test-${s.id}`}><Plug className="size-4" />Test connection</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setEditing(s)} data-testid={`sender-edit-limits-${s.id}`}><SlidersHorizontal className="size-4" />Limits & warm-up</DropdownMenuItem>
-                    {s.status !== "demo" && (s.status === "paused" ? (
-                      <DropdownMenuItem onClick={() => patch.mutate({ id: s.id, body: { status: "active" } })} data-testid={`sender-resume-${s.id}`}><Play className="size-4" />Resume sending</DropdownMenuItem>
-                    ) : (
-                      <DropdownMenuItem onClick={() => patch.mutate({ id: s.id, body: { status: "paused" } })} data-testid={`sender-pause-${s.id}`}><Pause className="size-4" />Pause sending</DropdownMenuItem>
-                    ))}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem variant="destructive" onClick={() => del.mutate(s.id)} data-testid={`sender-delete-${s.id}`}><Trash2 className="size-4" />Remove</DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                <Pill cls={SENDER_STATUS[s.status].cls} testId={`sender-status-${s.id}`}>{SENDER_STATUS[s.status].label}</Pill>
-                {s.auth_type === "google_oauth" && <Pill cls="border-blue-500/30 bg-blue-500/10 text-blue-300">Google OAuth</Pill>}
-                {s.warmup_enabled && (
-                  <Pill cls={s.effective_limit < s.daily_limit ? "border-orange-500/30 bg-orange-500/10 text-orange-300" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"} testId={`sender-warmup-${s.id}`}>
-                    <Flame className="size-3" />{s.effective_limit < s.daily_limit ? `Warm-up day ${s.warmup_day}` : "Warm-up complete"}
-                  </Pill>
-                )}
-              </div>
-              {s.last_error && <p className="mt-2 line-clamp-2 text-xs text-red-300" data-testid={`sender-error-${s.id}`}>{s.last_error}</p>}
-              <div className="mt-5">
-                <div className="mb-1.5 flex justify-between font-mono text-xs"><span className="text-muted-foreground">Sent today</span><span className="text-foreground/90">{s.sent_today}/{s.effective_limit}</span></div>
-                <RateBar value={(s.sent_today / Math.max(1, s.effective_limit)) * 100} color={s.status === "error" ? "bg-red-500" : "bg-cyan-500"} />
-              </div>
-              <div className="mt-4 grid grid-cols-3 gap-2 border-t border-border pt-4 text-center font-mono">
-                <div><p className="text-base text-foreground">{fmt(s.sent_total)}</p><p className="text-[10px] uppercase text-muted-foreground">Sent</p></div>
-                <div><p className="text-base text-emerald-300">{fmt(s.reply_count)}</p><p className="text-[10px] uppercase text-muted-foreground">Replies</p></div>
-                <div><p className="text-xs leading-6 text-foreground/75">{s.imap_host ? timeAgo(s.last_synced_at) : "off"}</p><p className="text-[10px] uppercase text-muted-foreground">IMAP sync</p></div>
-              </div>
-              {s.warmup_enabled && s.effective_limit < s.daily_limit && (
-                <div className="mt-3" data-testid={`sender-warmup-progress-${s.id}`}>
-                  <div className="mb-1 flex justify-between font-mono text-[11px] text-muted-foreground"><span>Ramp {s.effective_limit}/{s.daily_limit} per day</span><span>+{s.warmup_increment}/day</span></div>
-                  <RateBar value={(s.effective_limit / s.daily_limit) * 100} color="bg-orange-400" />
-                </div>
-              )}
-              {testRes?.id === s.id && <div className="mt-4"><TestResult r={testRes.r} authType={s.auth_type} /></div>}
-            </div>
-          ))}
+        <div className="overflow-hidden rounded-xl border border-border bg-panel animate-fade-up" data-testid="senders-table-wrap">
+          <div className="overflow-x-auto scroll-thin">
+            <table className="w-full text-sm" data-testid="senders-table">
+              <thead className="bg-background/40 text-left text-[11px] uppercase tracking-[0.07em] text-muted-foreground">
+                <tr className="border-b border-border">
+                  <th className="px-5 py-3 font-semibold">Inbox</th>
+                  <th className="px-3 py-3 font-semibold">Vendor</th>
+                  <th className="px-3 py-3 font-semibold">Daily limit</th>
+                  <th className="px-3 py-3 font-semibold">Sending health</th>
+                  <th className="px-3 py-3 font-semibold">Status</th>
+                  <th className="px-3 py-3 font-semibold">Replies</th>
+                  <th className="px-3 py-3 font-semibold">IMAP sync</th>
+                  <th className="px-3 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((s, i) => {
+                  const t = healthTone(s.sending_health);
+                  const vendor = s.auth_type === "google_oauth" ? "Google OAuth" : s.smtp_host.replace(/^smtp\./, "");
+                  const used = Math.min(100, (s.sent_today / Math.max(1, s.effective_limit)) * 100);
+                  return (
+                    <tr key={s.id} className="group border-b border-border/60 transition-colors hover:bg-foreground/[0.03] animate-fade-up" style={{ animationDelay: `${Math.min(i, 10) * 35}ms` }} data-testid={`sender-row-${s.id}`}>
+                      <td className="px-5 py-3">
+                        <p className="font-medium text-foreground">{s.from_name || s.email.split("@")[0]}</p>
+                        <p className="truncate font-mono text-xs text-muted-foreground">{s.email}</p>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground/80" data-testid={`sender-vendor-${s.id}`}>
+                          {s.auth_type === "google_oauth" ? (
+                            <span className="grid size-4 place-items-center rounded-full bg-white text-[10px] font-bold text-blue-600">G</span>
+                          ) : (
+                            <Server className="size-3.5 text-cyan" />
+                          )}
+                          <span className="truncate max-w-[140px]">{vendor}</span>
+                        </span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs text-foreground/90 min-w-[64px]">{s.sent_today} / {s.effective_limit}</span>
+                          <div className="h-1 w-20 overflow-hidden rounded-full bg-muted">
+                            <div className={`h-full ${s.status === "error" ? "bg-red-500" : "bg-cyan-500"} transition-all`} style={{ width: `${used}%` }} />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3" data-testid={`sender-health-cell-${s.id}`}>
+                        <div className="flex items-center gap-2">
+                          <span className={`font-mono text-sm font-semibold ${t.color}`} data-testid={`sender-health-score-${s.id}`}>{s.sending_health}</span>
+                          <div className="h-1 w-16 overflow-hidden rounded-full bg-muted">
+                            <div className={`h-full ${t.dot} transition-all`} style={{ width: `${s.sending_health}%` }} />
+                          </div>
+                          <span className="text-[10px] uppercase text-muted-foreground">{t.label}</span>
+                        </div>
+                        {s.sent_14d > 0 && (
+                          <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
+                            {s.sent_14d} sent · {s.bounce_rate_14d}% bounce · {s.reply_rate_14d}% reply (14d)
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-3 py-3">
+                        <Pill cls={SENDER_STATUS[s.status].cls} testId={`sender-status-${s.id}`}>{SENDER_STATUS[s.status].label}</Pill>
+                        {s.last_error && <p className="mt-1 max-w-[180px] truncate text-[11px] text-red-300" data-testid={`sender-error-${s.id}`}>{s.last_error}</p>}
+                      </td>
+                      <td className="px-3 py-3 font-mono text-xs text-emerald-300">{fmt(s.reply_count)}</td>
+                      <td className="px-3 py-3 font-mono text-xs text-foreground/75">{s.imap_host ? timeAgo(s.last_synced_at) : <span className="text-muted-foreground/60">off</span>}</td>
+                      <td className="px-3 py-3 text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger render={<Button variant="ghost" size="icon-xs" data-testid={`sender-menu-${s.id}`} />}>
+                            <MoreHorizontal className="size-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => test.mutate(s.id)} data-testid={`sender-test-${s.id}`}><Plug className="size-4" />Test connection</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setEditing(s)} data-testid={`sender-edit-limits-${s.id}`}><SlidersHorizontal className="size-4" />Inbox settings</DropdownMenuItem>
+                            {s.status !== "demo" && (s.status === "paused" ? (
+                              <DropdownMenuItem onClick={() => patch.mutate({ id: s.id, body: { status: "active" } })} data-testid={`sender-resume-${s.id}`}><Play className="size-4" />Resume sending</DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem onClick={() => patch.mutate({ id: s.id, body: { status: "paused" } })} data-testid={`sender-pause-${s.id}`}><Pause className="size-4" />Pause sending</DropdownMenuItem>
+                            ))}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem variant="destructive" onClick={() => del.mutate(s.id)} data-testid={`sender-delete-${s.id}`}><Trash2 className="size-4" />Remove</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        {testRes?.id === s.id && <div className="mt-2 w-[220px] text-left"><TestResult r={testRes.r} authType={s.auth_type} /></div>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
       <div className="mt-8 grid gap-4 lg:grid-cols-3" data-testid="deliverability-guide">
@@ -364,7 +474,7 @@ export default function SenderAccounts() {
               ["DKIM signing", "Enable DKIM in Google Workspace / Microsoft 365 and publish the TXT key."],
               ["DMARC policy", "Start with v=DMARC1; p=none; rua=mailto:dmarc@yourdomain.com"],
               ["Custom tracking domain", "Point a subdomain (e.g. track.yourdomain.com) at this app for opens & clicks."],
-              ["Warm-up ramp", "Keep warm-up on for 2–3 weeks; start at 5/day, +3/day."],
+              ["Sending health", "Watch each inbox's score here — above 85 is excellent, below 65 means something's off."],
               ["Separate sending domain", "Use lookalike domains (getbrand.com) so your main domain stays clean."],
             ].map(([t, b]) => (
               <li key={t} className="flex gap-3 rounded-lg border border-border bg-background p-3">
@@ -378,7 +488,7 @@ export default function SenderAccounts() {
           <p className="text-xs font-medium text-primary">Recommended limits</p>
           <h2 className="mt-1 font-heading text-lg font-semibold text-foreground">Healthy sending volume</h2>
           <div className="mt-4 space-y-3 text-sm">
-            {[["Week 1", "5–15 / day"], ["Week 2", "15–30 / day"], ["Week 3+", "30–50 / day"], ["Gap between sends", "8–15 min"], ["Inboxes per domain", "2–3 max"]].map(([a, b]) => (
+            {[["Daily cap per inbox", "30–50 / day"], ["Gap between sends", "8–15 min"], ["Inboxes per domain", "2–3 max"], ["Bounce rate", "under 2%"], ["Reply rate target", "5%+"]].map(([a, b]) => (
               <div key={a} className="flex items-center justify-between border-b border-border/60 pb-2 last:border-0"><span className="text-muted-foreground">{a}</span><span className="font-mono text-foreground">{b}</span></div>
             ))}
           </div>

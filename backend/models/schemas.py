@@ -20,7 +20,13 @@ class UserOut(BaseModel):
     id: str
     name: str
     email: str
+    default_signature: str = ""
     created_at: datetime
+
+
+class WorkspaceUpdate(BaseModel):
+    default_signature: Optional[str] = Field(default=None, max_length=4000)
+    apply_signature_to_all_inboxes: bool = False
 
 
 # ---------- senders ----------
@@ -40,9 +46,6 @@ class SenderIn(BaseModel):
     imap_user: str = ""
     imap_pass: str = ""
     daily_limit: int = Field(default=40, ge=1, le=2000)
-    warmup_enabled: bool = False
-    warmup_start: int = Field(default=5, ge=1, le=500)
-    warmup_increment: int = Field(default=3, ge=1, le=200)
     signatures: list[str] = Field(default_factory=list, max_length=5)
 
 
@@ -52,9 +55,6 @@ class SenderUpdate(BaseModel):
     status: Optional[Literal["active", "paused"]] = None
     smtp_pass: Optional[str] = None
     imap_pass: Optional[str] = None
-    warmup_enabled: Optional[bool] = None
-    warmup_start: Optional[int] = Field(default=None, ge=1, le=500)
-    warmup_increment: Optional[int] = Field(default=None, ge=1, le=200)
     signatures: Optional[list[str]] = Field(default=None, max_length=5)
 
 
@@ -70,11 +70,11 @@ class SenderOut(BaseModel):
     imap_port: int
     daily_limit: int
     effective_limit: int = 0
-    warmup_enabled: bool = False
-    warmup_start: int = 5
-    warmup_increment: int = 3
-    warmup_day: int = 0
     signatures: list[str] = []
+    sending_health: int = 100         # 0–100, computed from last 14 days
+    bounce_rate_14d: float = 0.0      # 0–100
+    reply_rate_14d: float = 0.0       # 0–100
+    sent_14d: int = 0
     status: SenderStatus
     last_error: str = ""
     sent_today: int = 0
@@ -131,6 +131,7 @@ class CampaignUpdate(BaseModel):
     plain_text_only: Optional[bool] = None
     smart_subject: Optional[bool] = None
     extra_jitter_minutes: Optional[int] = Field(default=None, ge=0, le=30)
+    followup_priority: Optional[int] = Field(default=None, ge=0, le=100)
 
 
 class StatTotals(BaseModel):
@@ -171,6 +172,7 @@ class CampaignOut(BaseModel):
     plain_text_only: bool = False
     smart_subject: bool = False
     extra_jitter_minutes: int = 0
+    followup_priority: int = 50
     created_at: datetime
     launched_at: Optional[datetime] = None
     stats: StatTotals

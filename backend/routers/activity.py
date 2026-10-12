@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query
 
 from lib.auth import current_user
 from lib.db import db
-from lib.util import now, start_of_today, warmup_info
+from lib.util import now, start_of_today
 from models.schemas import ActivityItem, ActivityOut, InboxSchedule, UpcomingSend
 
 router = APIRouter(prefix="/activity", tags=["activity"])
@@ -42,7 +42,7 @@ async def activity(campaign_id: Optional[str] = None, limit: int = Query(50, ge=
         inboxes.append(InboxSchedule(
             id=s["id"], email=s["email"], status=s["status"],
             sent_today=await db.messages.count_documents({"sender_id": s["id"], "sent_at": {"$gte": start_of_today()}}),
-            effective_limit=warmup_info(s)[0], last_sent_at=(last or {}).get("sent_at"),
+            effective_limit=int(s.get("daily_limit") or 0), last_sent_at=(last or {}).get("sent_at"),
             next_available_at=nxt if nxt and nxt > now() else None))
     active = [c["id"] for c in await db.campaigns.find({"user_id": user["id"], "status": "active", **({"id": campaign_id} if campaign_id else {})}, {"_id": 0, "id": 1}).to_list(1000)]
     upcoming = []

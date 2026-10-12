@@ -3,7 +3,46 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  default_signature: string;
   created_at: string;
+}
+
+export interface WorkspaceUpdate {
+  default_signature?: string;
+  apply_signature_to_all_inboxes?: boolean;
+}
+
+export interface LeadHistoryMessage {
+  id: string;
+  step_index: number;
+  variant: "a" | "b";
+  subject: string;
+  body: string;
+  sender_email: string;
+  sender_from_name: string;
+  sent_at: string;
+  opened_at: string | null;
+  open_count: number;
+  clicked_at: string | null;
+  click_count: number;
+  replied_at: string | null;
+  bounced: boolean;
+  unsubscribed: boolean;
+}
+
+export interface LeadHistory {
+  lead: {
+    id: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+    company: string;
+    title: string;
+    status: string;
+    current_step: number;
+    next_send_at: string | null;
+  };
+  messages: LeadHistoryMessage[];
 }
 
 export type SenderStatus = "active" | "error" | "paused" | "demo";
@@ -21,9 +60,6 @@ export interface SenderIn {
   imap_user: string;
   imap_pass: string;
   daily_limit: number;
-  warmup_enabled: boolean;
-  warmup_start: number;
-  warmup_increment: number;
   signatures: string[];
 }
 
@@ -31,9 +67,6 @@ export interface SenderUpdate {
   from_name?: string;
   daily_limit?: number;
   status?: "active" | "paused";
-  warmup_enabled?: boolean;
-  warmup_start?: number;
-  warmup_increment?: number;
   signatures?: string[];
 }
 
@@ -49,11 +82,11 @@ export interface Sender {
   imap_port: number;
   daily_limit: number;
   effective_limit: number;
-  warmup_enabled: boolean;
-  warmup_start: number;
-  warmup_increment: number;
-  warmup_day: number;
   signatures: string[];
+  sending_health: number;
+  bounce_rate_14d: number;
+  reply_rate_14d: number;
+  sent_14d: number;
   status: SenderStatus;
   last_error: string;
   sent_today: number;
@@ -122,6 +155,7 @@ export interface Campaign {
   plain_text_only: boolean;
   smart_subject: boolean;
   extra_jitter_minutes: number;
+  followup_priority: number;
   created_at: string;
   launched_at: string | null;
   stats: StatTotals;
@@ -129,7 +163,7 @@ export interface Campaign {
 }
 
 export type CampaignUpdate = Partial<
-  Pick<Campaign, "name" | "steps" | "sender_ids" | "daily_limit" | "track_opens" | "track_clicks" | "stop_on_reply" | "include_unsubscribe" | "send_days" | "timezone" | "use_lead_timezone" | "gap_min_minutes" | "gap_max_minutes" | "random_start_minutes" | "send_start_hour" | "send_end_hour" | "plain_text_only" | "smart_subject" | "extra_jitter_minutes">
+  Pick<Campaign, "name" | "steps" | "sender_ids" | "daily_limit" | "track_opens" | "track_clicks" | "stop_on_reply" | "include_unsubscribe" | "send_days" | "timezone" | "use_lead_timezone" | "gap_min_minutes" | "gap_max_minutes" | "random_start_minutes" | "send_start_hour" | "send_end_hour" | "plain_text_only" | "smart_subject" | "extra_jitter_minutes" | "followup_priority">
 >;
 
 // --- AI Rewrite --------------------------------------------------------

@@ -13,7 +13,8 @@ from lib import mailer
 from lib.google_gmail import encrypt_refresh_token
 from lib.auth import current_user
 from lib.db import db
-from lib.util import new_id, now, start_of_today, warmup_info
+from lib.sender_health import compute_health
+from lib.util import new_id, now, start_of_today
 from models.schemas import ConnectionTestOut, SenderIn, SenderOut, SenderUpdate
 
 router = APIRouter(prefix="/senders", tags=["senders"])
@@ -148,13 +149,10 @@ async def google_oauth_callback(request: Request):
                 "email": email,
                 "from_name": profile.get("name") or email.split("@")[0],
                 "daily_limit": 10,
-                "warmup_enabled": True,
-                "warmup_start": 5,
-                "warmup_increment": 3,
+                "signatures": [],
                 "last_uid": 0,
                 "last_synced_at": None,
                 "created_at": now(),
-                "warmup_started_at": now(),
                 "next_available_at": None,
             }
             await db.senders.insert_one(doc)
@@ -170,10 +168,11 @@ async def _out(s: dict) -> SenderOut:
     sent_today = await db.messages.count_documents({"sender_id": s["id"], "sent_at": {"$gte": start_of_today()}})
     sent_total = await db.messages.count_documents({"sender_id": s["id"]})
     replies = await db.threads.count_documents({"sender_id": s["id"]})
-    effective, day = warmup_info(s)
-    return SenderOut(**{k: v for k, v in s.items() if k in SenderOut.model_fields and k not in ("effective_limit", "warmup_day")},
-                     sent_today=sent_today, sent_total=sent_total, reply_count=replies,
-                     effective_limit=effective, warmup_day=day)
+    limit = int(s.get("daily_limit") or 0)
+    health = await compute_health(db, s)
+    payload = {k: v for k, v in s.items() if k in SenderOut.model_fields and k != "effective_limit"}
+    return SenderOut(**payload, sent_today=sent_today, sent_total=sent_total, reply_count=replies,
+                     effective_limit=limit, **health)
 
 
 async def _get(user: dict, sid: str) -> dict:
@@ -201,7 +200,7 @@ async def create_sender(body: SenderIn, user: dict = Depends(current_user)):
         raise HTTPException(status_code=409, detail="This sender is already connected")
     doc = body.model_dump()
     doc.update(id=new_id(), user_id=user["id"], email=email, status="active", last_error="",
-               last_uid=0, last_synced_at=None, created_at=now(), warmup_started_at=now())
+               last_uid=0, last_synced_at=None, created_at=now())
     if not doc["imap_user"]:
         doc["imap_user"] = doc["smtp_user"]
     if not doc["imap_pass"]:
@@ -218,8 +217,6 @@ async def update_sender(sid: str, body: SenderUpdate, user: dict = Depends(curre
         upd.pop("status", None)
     if upd.get("status") == "active":
         upd["last_error"] = ""
-    if upd.get("warmup_enabled") and not s.get("warmup_enabled"):
-        upd["warmup_started_at"] = now()  # restart the ramp from day 1
     if upd:
         await db.senders.update_one({"id": sid}, {"$set": upd})
     return await _out(await _get(user, sid))

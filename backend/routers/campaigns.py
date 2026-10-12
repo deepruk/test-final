@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from lib.auth import current_user
 from lib.db import db
 from lib.engine import decide_winner, in_send_window, zone
-from lib.util import start_of_today, warmup_info
+from lib.util import start_of_today
 from datetime import timedelta
 from lib.stats import PROJ, build_series, build_steps, campaign_totals, totals_from
 from lib.util import new_id, now
@@ -57,7 +57,7 @@ async def create_campaign(body: CampaignCreate, user: dict = Depends(current_use
         "track_clicks": True, "stop_on_reply": True, "include_unsubscribe": True, "custom_fields": [],
         "send_days": [0, 1, 2, 3, 4], "timezone": "UTC", "use_lead_timezone": False,
         "gap_min_minutes": 10, "gap_max_minutes": 15, "random_start_minutes": 30, "send_start_hour": 0, "send_end_hour": 24,
-        "plain_text_only": False, "smart_subject": False, "extra_jitter_minutes": 0,
+        "plain_text_only": False, "smart_subject": False, "extra_jitter_minutes": 0, "followup_priority": 50,
         "created_at": now(), "launched_at": None,
     }
     await db.campaigns.insert_one(c)
@@ -151,7 +151,7 @@ async def campaign_live(cid: str, user: dict = Depends(current_user)):
     senders = await db.senders.find({"id": {"$in": c.get("sender_ids", [])}}, {"_id": 0}).to_list(100)
     usable = [s for s in senders if s["status"] in ("active", "demo")]
     sent_today = await db.messages.count_documents({"campaign_id": cid, "sent_at": {"$gte": start_of_today()}})
-    inbox_cap = sum(warmup_info(s)[0] for s in usable)
+    inbox_cap = sum(int(s.get("daily_limit") or 0) for s in usable)
     cap = min(c.get("daily_limit", 100), inbox_cap) if usable else 0
     active = await db.leads.count_documents({"campaign_id": cid, "status": {"$in": ["pending", "in_progress"]}})
     last30 = await db.messages.count_documents({"campaign_id": cid, "sent_at": {"$gte": n - timedelta(minutes=30)}})
@@ -171,7 +171,7 @@ async def campaign_live(cid: str, user: dict = Depends(current_user)):
         lead_at = (due or {}).get("next_send_at") or n
         free = []
         for s in usable:
-            if await db.messages.count_documents({"sender_id": s["id"], "sent_at": {"$gte": start_of_today()}}) < warmup_info(s)[0]:
+            if await db.messages.count_documents({"sender_id": s["id"], "sent_at": {"$gte": start_of_today()}}) < int(s.get("daily_limit") or 0):
                 free.append(s.get("next_available_at") or n)
         if not free:
             out.next_note = "All inboxes hit today's limit"
@@ -183,12 +183,30 @@ async def campaign_live(cid: str, user: dict = Depends(current_user)):
 
 
 # ---------- leads ----------
+# Engagement pseudo-statuses: "opened" and "clicked" don't live on the lead doc —
+# they're derived from the messages collection. We treat them as filters, not stored statuses.
+_ENGAGEMENT_STATUSES = {"opened", "clicked"}
+
+
+async def _engagement_lead_ids(campaign_id: str, kind: str) -> list[str]:
+    key = "opened_at" if kind == "opened" else "clicked_at"
+    cnt = "open_count" if kind == "opened" else "click_count"
+    return await db.messages.distinct("lead_id", {
+        "campaign_id": campaign_id,
+        "$or": [{key: {"$ne": None}}, {cnt: {"$gt": 0}}],
+    })
+
+
 @router.get("/{cid}/leads", response_model=list[LeadOut])
 async def list_leads(cid: str, q: str = "", status: Optional[str] = None, user: dict = Depends(current_user)):
     await _get(user, cid)
     flt: dict = {"campaign_id": cid}
     if status and status != "all":
-        flt["status"] = status
+        if status in _ENGAGEMENT_STATUSES:
+            engaged = await _engagement_lead_ids(cid, status)
+            flt["id"] = {"$in": engaged}
+        else:
+            flt["status"] = status
     if q:
         flt["$or"] = [{f: {"$regex": q, "$options": "i"}} for f in ("email", "first_name", "last_name", "company")]
     docs = await db.leads.find(flt, {"_id": 0}).sort("created_at", -1).to_list(5000)
@@ -197,6 +215,93 @@ async def list_leads(cid: str, q: str = "", status: Optional[str] = None, user: 
     clicked = set(await db.messages.distinct("lead_id", {"lead_id": {"$in": ids}, "$or": [{"clicked_at": {"$ne": None}}, {"click_count": {"$gt": 0}}]}))
     return [LeadOut(**{k: v for k, v in d.items() if k in LeadOut.model_fields},
                     opened=d["id"] in opened, clicked=d["id"] in clicked) for d in docs]
+
+
+@router.get("/{cid}/leads/export")
+async def export_leads(cid: str, user: dict = Depends(current_user)):
+    """Stream all leads as CSV so the user can dedupe against future imports."""
+    import csv
+    import io
+    from fastapi.responses import StreamingResponse
+
+    c = await _get(user, cid)
+    docs = await db.leads.find({"campaign_id": cid}, {"_id": 0}).sort("created_at", 1).to_list(50000)
+    ids = [d["id"] for d in docs]
+    opened = set(await db.messages.distinct("lead_id", {"lead_id": {"$in": ids}, "$or": [{"opened_at": {"$ne": None}}, {"open_count": {"$gt": 0}}]}))
+    clicked = set(await db.messages.distinct("lead_id", {"lead_id": {"$in": ids}, "$or": [{"clicked_at": {"$ne": None}}, {"click_count": {"$gt": 0}}]}))
+    custom_cols = sorted({k for d in docs for k in (d.get("custom") or {}).keys()})
+    base_cols = ["email", "first_name", "last_name", "company", "title", "timezone",
+                 "status", "current_step", "opened", "clicked", "last_sent_at", "created_at"]
+    cols = base_cols + custom_cols
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(cols)
+    for d in docs:
+        row: list = [
+            d.get("email", ""), d.get("first_name", ""), d.get("last_name", ""),
+            d.get("company", ""), d.get("title", ""), d.get("timezone", ""),
+            d.get("status", ""), d.get("current_step", 0),
+            "yes" if d["id"] in opened else "no",
+            "yes" if d["id"] in clicked else "no",
+            (d.get("last_sent_at") or "").isoformat() if d.get("last_sent_at") else "",
+            (d.get("created_at") or "").isoformat() if d.get("created_at") else "",
+        ]
+        for k in custom_cols:
+            row.append((d.get("custom") or {}).get(k, ""))
+        w.writerow(row)
+    buf.seek(0)
+    safe = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in (c.get("name") or "campaign"))[:40]
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="leads-{safe}.csv"'},
+    )
+
+
+@router.get("/{cid}/leads/{lid}/history")
+async def lead_history(cid: str, lid: str, user: dict = Depends(current_user)):
+    """Every email the engine sent to this lead — subject, body preview, timing, engagement."""
+    await _get(user, cid)
+    lead = await db.leads.find_one({"id": lid, "campaign_id": cid}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    msgs = await db.messages.find({"lead_id": lid, "campaign_id": cid}, {"_id": 0}) \
+        .sort("sent_at", 1).to_list(500)
+    senders = {s["id"]: s for s in await db.senders.find({"user_id": user["id"]}, {"_id": 0}).to_list(500)}
+    items = []
+    for m in msgs:
+        s = senders.get(m.get("sender_id")) or {}
+        items.append({
+            "id": m["id"],
+            "step_index": m.get("step_index", 0),
+            "variant": m.get("variant") or "a",
+            "subject": m.get("subject", ""),
+            "body": m.get("body", ""),
+            "sender_email": s.get("email", "removed inbox"),
+            "sender_from_name": s.get("from_name", ""),
+            "sent_at": m.get("sent_at"),
+            "opened_at": m.get("opened_at"),
+            "open_count": int(m.get("open_count") or 0),
+            "clicked_at": m.get("clicked_at"),
+            "click_count": int(m.get("click_count") or 0),
+            "replied_at": m.get("replied_at"),
+            "bounced": bool(m.get("bounced")),
+            "unsubscribed": bool(m.get("unsubscribed")),
+        })
+    return {
+        "lead": {
+            "id": lead["id"],
+            "email": lead["email"],
+            "first_name": lead.get("first_name", ""),
+            "last_name": lead.get("last_name", ""),
+            "company": lead.get("company", ""),
+            "title": lead.get("title", ""),
+            "status": lead.get("status", "pending"),
+            "current_step": lead.get("current_step", 0),
+            "next_send_at": lead.get("next_send_at"),
+        },
+        "messages": items,
+    }
 
 
 @router.post("/{cid}/leads", response_model=LeadImportResult)

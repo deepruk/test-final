@@ -1,9 +1,9 @@
 import { useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Clock, Timer, FileUp, Globe, Loader2, Plus, Save, Search, Shuffle, Sparkles, ShieldCheck, Trash2, Upload, UserPlus, Wand2 } from "lucide-react";
+import { CalendarDays, Clock, Download, Eye, FileUp, Globe, History, Loader2, MessageSquareReply, MousePointerClick, Plus, Save, Search, ShieldCheck, Shuffle, Sparkles, Timer, Trash2, Upload, UserPlus, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
-import type { Campaign, Lead, LeadImportResult, LeadIn, RewriteGoal, RewriteLength, RewriteRequest, RewriteResponse, RewriteTone, Sender, Step } from "@/lib/types";
+import type { Campaign, Lead, LeadHistory, LeadImportResult, LeadIn, RewriteGoal, RewriteLength, RewriteRequest, RewriteResponse, RewriteTone, Sender, Step } from "@/lib/types";
 import { LEAD_STATUS, errMsg, timeAgo } from "@/lib/format";
 import { Panel, Pill } from "@/components/ui-kit";
 import { scoreCampaign, scoreBand, type SpamItem, type StepScore } from "@/lib/spam";
@@ -98,6 +98,7 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
   const [drag, setDrag] = useState(false);
   const [manual, setManual] = useState(false);
   const [one, setOne] = useState<LeadIn>({ email: "", first_name: "", last_name: "", company: "", title: "", timezone: "", custom: {} });
+  const [historyLead, setHistoryLead] = useState<Lead | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const leads = useQuery({
     queryKey: ["leads", campaign.id, q, status],
@@ -177,13 +178,23 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
             </div>
             <Select value={status} onValueChange={(v: string) => setStatus(v)}>
               <SelectTrigger size="sm" className="w-36" data-testid="lead-status-filter">
-                <SelectValue>{(v) => (v === "all" ? "All statuses" : LEAD_STATUS[v as keyof typeof LEAD_STATUS]?.label)}</SelectValue>
+                <SelectValue>{(v) => {
+                  if (v === "all") return "All statuses";
+                  if (v === "opened") return "Opened";
+                  if (v === "clicked") return "Clicked";
+                  return LEAD_STATUS[v as keyof typeof LEAD_STATUS]?.label;
+                }}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
                 {Object.entries(LEAD_STATUS).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+                <SelectItem value="opened" data-testid="lead-status-opened">Opened</SelectItem>
+                <SelectItem value="clicked" data-testid="lead-status-clicked">Clicked</SelectItem>
               </SelectContent>
             </Select>
+            <Button variant="outline" size="sm" onClick={() => { window.location.assign(`/api/campaigns/${campaign.id}/leads/export`); }} data-testid="leads-export-button">
+              <Download className="size-4" /> Export CSV
+            </Button>
           </div>
         }
         testId="leads-panel"
@@ -203,7 +214,7 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
             </thead>
             <tbody>
               {rows.map((l) => (
-                <tr key={l.id} className="border-b border-border/70 transition-colors hover:bg-foreground/[0.02]" data-testid={`lead-row-${l.id}`}>
+                <tr key={l.id} onClick={() => setHistoryLead(l)} className="cursor-pointer border-b border-border/70 transition-colors hover:bg-foreground/[0.03]" data-testid={`lead-row-${l.id}`}>
                   <td className="px-5 py-2.5">
                     <p className="font-medium text-foreground">{`${l.first_name} ${l.last_name}`.trim() || "—"}</p>
                     <p className="font-mono text-xs text-muted-foreground">{l.email}</p>
@@ -227,7 +238,10 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
                     </div>
                   </td>
                   <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">{timeAgo(l.last_sent_at)}</td>
-                  <td className="px-3 py-2.5 text-right">
+                  <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                    <Button variant="ghost" size="icon-xs" onClick={() => setHistoryLead(l)} data-testid={`lead-history-${l.id}`} aria-label="View lead history">
+                      <History className="size-3.5 text-muted-foreground" />
+                    </Button>
                     <Button variant="ghost" size="icon-xs" onClick={() => del.mutate(l.id)} data-testid={`lead-delete-${l.id}`} aria-label="Remove lead">
                       <Trash2 className="size-3.5 text-muted-foreground" />
                     </Button>
@@ -298,7 +312,81 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
           </form>
         </DialogContent>
       </Dialog>
+
+      <LeadHistoryDialog campaign={campaign} lead={historyLead} onClose={() => setHistoryLead(null)} />
     </div>
+  );
+}
+
+// -------- Lead history dialog -------------------------------------------
+function LeadHistoryDialog({ campaign, lead, onClose }: { campaign: Campaign; lead: Lead | null; onClose: () => void }) {
+  const h = useQuery({
+    queryKey: ["lead-history", campaign.id, lead?.id],
+    queryFn: () => apiGet<LeadHistory>(`/campaigns/${campaign.id}/leads/${lead!.id}/history`),
+    enabled: !!lead,
+  });
+  const data = h.isError ? undefined : h.data;
+  return (
+    <Dialog open={!!lead} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl scroll-thin" data-testid="lead-history-dialog">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <History className="size-4 text-cyan" /> {`${lead?.first_name ?? ""} ${lead?.last_name ?? ""}`.trim() || lead?.email || "Lead history"}
+          </DialogTitle>
+          <DialogDescription className="font-mono text-xs">
+            {lead?.email}{lead?.company ? ` · ${lead.company}` : ""}
+          </DialogDescription>
+        </DialogHeader>
+        {h.isPending && <div className="flex items-center justify-center py-10"><Loader2 className="size-5 animate-spin text-muted-foreground" /></div>}
+        {data && data.messages.length === 0 && (
+          <p className="rounded-lg border border-dashed border-border bg-background px-5 py-10 text-center text-sm text-muted-foreground" data-testid="lead-history-empty">
+            No emails sent to this lead yet. Launch the campaign and the first step will land in their inbox.
+          </p>
+        )}
+        {data && data.messages.length > 0 && (
+          <ol className="relative my-3 space-y-4 pl-6" data-testid="lead-history-timeline">
+            <span className="absolute inset-y-2 left-[11px] w-px bg-border" aria-hidden />
+            {data.messages.map((m) => {
+              const sent = new Date(m.sent_at);
+              return (
+                <li key={m.id} className="relative" data-testid={`lead-history-msg-${m.id}`}>
+                  <span className="absolute -left-6 top-1 grid size-6 place-items-center rounded-full border border-border bg-panel text-[10px] font-mono text-cyan">
+                    {m.step_index + 1}
+                  </span>
+                  <div className="rounded-lg border border-border bg-background p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-foreground">{m.subject || <span className="italic text-muted-foreground">Same-thread follow-up</span>}</p>
+                        <p className="truncate font-mono text-[11px] text-muted-foreground">
+                          {m.sender_from_name ? `${m.sender_from_name} <${m.sender_email}>` : m.sender_email} → {lead?.email}
+                        </p>
+                      </div>
+                      <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{sent.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5" data-testid={`lead-history-badges-${m.id}`}>
+                      <Pill cls="border-blue-500/30 bg-blue-500/10 text-blue-300">Step {m.step_index + 1}{m.variant === "b" ? " · B" : ""}</Pill>
+                      {m.opened_at && <Pill cls="border-sky-500/30 bg-sky-500/10 text-sky-300"><Eye className="size-3" /> Opened{m.open_count > 1 ? ` · ${m.open_count}×` : ""}</Pill>}
+                      {m.clicked_at && <Pill cls="border-amber-500/30 bg-amber-500/10 text-amber-300"><MousePointerClick className="size-3" /> Clicked{m.click_count > 1 ? ` · ${m.click_count}×` : ""}</Pill>}
+                      {m.replied_at && <Pill cls="border-emerald-500/30 bg-emerald-500/10 text-emerald-300"><MessageSquareReply className="size-3" /> Replied</Pill>}
+                      {m.bounced && <Pill cls="border-red-500/30 bg-red-500/10 text-red-300">Bounced</Pill>}
+                      {m.unsubscribed && <Pill cls="border-orange-500/30 bg-orange-500/10 text-orange-300">Unsubscribed</Pill>}
+                    </div>
+                    {m.body && (
+                      <pre className="mt-3 whitespace-pre-wrap font-sans text-xs leading-relaxed text-foreground/85" data-testid={`lead-history-body-${m.id}`}>
+                        {m.body.length > 1200 ? m.body.slice(0, 1200) + "…" : m.body}
+                      </pre>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} data-testid="lead-history-close">Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -829,6 +917,7 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
     send_start_hour: campaign.send_start_hour, send_end_hour: campaign.send_end_hour,
     plain_text_only: campaign.plain_text_only, smart_subject: campaign.smart_subject,
     extra_jitter_minutes: campaign.extra_jitter_minutes,
+    followup_priority: campaign.followup_priority,
   });
   const save = useMutation({
     mutationFn: () => apiPut<Campaign>(`/campaigns/${campaign.id}`, s),
@@ -1035,6 +1124,32 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
                 ))}
               </div>
             </div>
+          </div>
+        </Panel>
+
+        <Panel title={<span className="flex items-center gap-2"><Timer className="size-4 text-cyan" />Follow-up priority</span>} testId="settings-followup-panel">
+          <div className="space-y-3 p-5">
+            <div className="flex items-end justify-between text-[11px] uppercase tracking-wider text-muted-foreground">
+              <span>New leads</span>
+              <span className="font-mono text-sm normal-case tracking-normal text-foreground" data-testid="settings-followup-label">
+                {s.followup_priority === 50 ? "Balanced" : s.followup_priority >= 50 ? `${s.followup_priority}% Follow-ups` : `${100 - s.followup_priority}% New leads`}
+              </span>
+              <span>Follow-ups</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={s.followup_priority}
+              onChange={(e) => setS({ ...s, followup_priority: Number(e.target.value) })}
+              className="w-full accent-cyan-500"
+              data-testid="settings-followup-slider"
+              aria-label="Follow-up priority"
+            />
+            <p className="text-xs text-muted-foreground">
+              When the engine has limited daily capacity, this decides who gets served first. Drag right to drain follow-ups before touching new leads (keeps conversations warm). Drag left to prioritize fresh outreach.
+            </p>
           </div>
         </Panel>
         <Button className="w-full" onClick={() => save.mutate()} disabled={save.isPending} data-testid="settings-save-button">

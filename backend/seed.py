@@ -67,8 +67,7 @@ async def main() -> None:
                                       ("sam@outreachforgehq.com", "Sam Rivera")]):
         s = {"id": new_id(), "user_id": uid, "email": email, "from_name": name, "smtp_host": "smtp.demo.local",
              "smtp_port": 587, "smtp_security": "starttls", "smtp_user": email, "smtp_pass": "demo",
-             "imap_host": "", "imap_port": 993, "imap_user": email, "imap_pass": "demo", "daily_limit": [50, 40, 30][i], "warmup_enabled": i == 2, "warmup_start": 5, "warmup_increment": 3,
-             "warmup_started_at": now() - timedelta(days=6),
+             "imap_host": "", "imap_port": 993, "imap_user": email, "imap_pass": "demo", "daily_limit": [50, 40, 30][i], "signatures": [],
              "status": "demo", "last_error": "", "last_uid": 0, "last_synced_at": None,
              "created_at": now() - timedelta(days=28 - i)}
         senders.append(s)
