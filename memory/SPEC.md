@@ -48,6 +48,15 @@ Demo user demo@outreachforge.io / Demo@1234; 3 demo senders; 4 campaigns: "Q3 Sa
 - **Per-step tracking overrides** (step `track_opens`/`track_clicks`, nullable): null = inherit campaign setting; true/false = force on/off for that step. Resolved in engine.process_campaign.
 - **Per-inbox signatures** (sender `signatures: list[str]` up to 5): each lead keeps the same signature across follow-ups (sha256(sender_id:lead_id) % N). Appended to body if not already present. Edited in Senders → Limits & warm-up dialog, separated by lines of three dashes.
 
+## Iteration 8 — Spam Score Preview + AI Copywriter
+- **Spam score** (frontend-only, `src/lib/spam.ts`): rule-based score 0–100 recomputed live from `steps + include_unsubscribe`. Rules: empty / long / short / ALL-CAPS / "Re: Re:" stacked subject, excessive punctuation + spam-trigger words in subject or body, >3 links, URL shorteners (bit.ly, tinyurl, …), high CAPS ratio in body, "click here", missing `{{variable}}`, long preheader (>110), missing campaign unsubscribe.
+  - **Severity weights**: critical −25, warning −10, info −3. Overall score = worst step score minus campaign penalties.
+  - **Inline panel**: top of Sequence tab (`spam-score-panel`) with per-step chips (`S1·100`), item list for the active step, and 1-click **auto-fixes** (strip "Re:" chain, collapse !!! → !, sentence-case ALL-CAPS). Updates instantly as you type.
+  - **Launch hard gate**: when score < 60 the `Launch` button opens `launch-gate-dialog` showing score + critical/warning counts. User can "Open Sequence tab" or "Launch anyway" (destructive).
+- **AI Copywriter** (BYOK): `POST /api/ai/rewrite-step` → `openai/gpt-5.2` via `emergentintegrations.LlmChat`. Reads `OPENAI_API_KEY` from backend/.env; returns a friendly 400 when missing. Request = `{step: {subject, subject_b, body, preheader}, tone: professional|casual|friendly|direct, goal: cold_intro|followup|breakup, length: short|medium, product?, audience?}`. Response = strict JSON `{subject, body, preheader}` parsed from the model, with ```json``` fences stripped. Variables and spintax braces are preserved verbatim.
+  - **UI**: `Rewrite with AI` button in Sequence editor header → `rewrite-dialog` (Tone/Goal/Length selects + optional pitch/audience inputs). Generate → preview card (subject/preheader/body) → "Replace step" patches the current step.
+  - Error mapping: invalid key / 401 → 400 "key rejected", 429 → "rate-limited", other → 502.
+
 ## Iteration 6 — UI/UX overhaul
 - Light + dark themes via next-themes (ThemeProvider in main.tsx, default dark, stored in localStorage "theme"); tokens in index.css (:root light, .dark dark); Geist + Geist Mono fonts. Theme toggle in app top bar, user menu and landing header.
 - AppShell: grouped sidebar (Overview/Outreach/Insights), workspace card, today's sending usage card, breadcrumb, ⌘K command palette (pages, actions, campaigns), "Create" slide-down menu, user avatar menu (theme, logout).

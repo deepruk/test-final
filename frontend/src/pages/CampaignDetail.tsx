@@ -12,6 +12,7 @@ import { Panel, PerformanceChart, Pill, RateBar, SeriesToggles, StatCard, type S
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { scoreCampaign, scoreBand } from "@/lib/spam";
 
 function useNow(ms = 1000) {
   const [t, setT] = useState(() => Date.now());
@@ -117,6 +118,7 @@ export default function CampaignDetail() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [confirmDel, setConfirmDel] = useState(false);
+  const [launchWarn, setLaunchWarn] = useState<null | { score: number; label: string; critical: number; warnings: number }>(null);
   const c = useQuery({ queryKey: ["campaign", id], queryFn: () => apiGet<Campaign>(`/campaigns/${id}`), refetchInterval: 30000 });
   const refresh = (data: Campaign) => {
     qc.setQueryData(["campaign", id], data);
@@ -125,9 +127,20 @@ export default function CampaignDetail() {
   };
   const launch = useMutation({
     mutationFn: () => apiPost<Campaign>(`/campaigns/${id}/launch`),
-    onSuccess: (d) => { refresh(d); toast.success("Campaign launched — the engine will start sending within a minute"); },
+    onSuccess: (d) => { refresh(d); setLaunchWarn(null); toast.success("Campaign launched — the engine will start sending within a minute"); },
     onError: (e) => toast.error(errMsg(e)),
   });
+  const tryLaunch = () => {
+    if (!c.data) return;
+    const s = scoreCampaign({ steps: c.data.steps, include_unsubscribe: c.data.include_unsubscribe });
+    const band = scoreBand(s.score);
+    // Hard gate: block Launch when score drops below 60 (= Risky). User can override from the dialog.
+    if (s.score < 60) {
+      setLaunchWarn({ score: s.score, label: band.label, critical: s.critical, warnings: s.warnings });
+      return;
+    }
+    launch.mutate();
+  };
   const pause = useMutation({
     mutationFn: () => apiPost<Campaign>(`/campaigns/${id}/pause`),
     onSuccess: (d) => { refresh(d); toast.success("Campaign paused"); },
@@ -163,7 +176,7 @@ export default function CampaignDetail() {
                 {pause.isPending ? <Loader2 className="size-4 animate-spin" /> : <Pause className="size-4" />} Pause
               </Button>
             ) : (
-              <Button onClick={() => launch.mutate()} disabled={launch.isPending} className="bg-emerald-600 hover:bg-emerald-500" data-testid="campaign-launch-button">
+              <Button onClick={tryLaunch} disabled={launch.isPending} className="bg-emerald-600 hover:bg-emerald-500" data-testid="campaign-launch-button">
                 {launch.isPending ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />} {camp.status === "paused" ? "Resume" : "Launch"}
               </Button>
             )}
@@ -200,6 +213,29 @@ export default function CampaignDetail() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDel(false)} data-testid="delete-campaign-cancel">Cancel</Button>
             <Button variant="destructive" onClick={() => del.mutate()} disabled={del.isPending} data-testid="delete-campaign-confirm">Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!launchWarn} onOpenChange={(o) => { if (!o) setLaunchWarn(null); }}>
+        <DialogContent className="sm:max-w-md" data-testid="launch-gate-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldAlert className="size-5 text-red-400" /> Launch anyway?
+            </DialogTitle>
+            <DialogDescription>
+              This campaign's spam score is <span className="font-mono font-semibold text-red-300" data-testid="launch-gate-score">{launchWarn?.score}/100</span> ({launchWarn?.label}).
+              {launchWarn && launchWarn.critical > 0 && <> {launchWarn.critical} critical and {launchWarn.warnings} warning issue{launchWarn.warnings === 1 ? "" : "s"} will likely land these in Spam.</>}
+              <br /><br />
+              Fix the red items on the Sequence tab first — or launch anyway if you know what you're doing.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setLaunchWarn(null); setParams({ tab: "sequence" }); }} data-testid="launch-gate-fix">
+              Open Sequence tab
+            </Button>
+            <Button variant="destructive" onClick={() => launch.mutate()} disabled={launch.isPending} data-testid="launch-gate-force">
+              {launch.isPending && <Loader2 className="size-4 animate-spin" />} Launch anyway
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

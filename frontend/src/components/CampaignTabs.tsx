@@ -1,11 +1,12 @@
 import { useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Clock, Timer, FileUp, Globe, Loader2, Plus, Save, Search, Shuffle, Trash2, Upload, UserPlus } from "lucide-react";
+import { CalendarDays, Clock, Timer, FileUp, Globe, Loader2, Plus, Save, Search, Shuffle, Sparkles, ShieldCheck, Trash2, Upload, UserPlus, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
-import type { Campaign, Lead, LeadImportResult, LeadIn, Sender, Step } from "@/lib/types";
+import type { Campaign, Lead, LeadImportResult, LeadIn, RewriteGoal, RewriteLength, RewriteRequest, RewriteResponse, RewriteTone, Sender, Step } from "@/lib/types";
 import { LEAD_STATUS, errMsg, timeAgo } from "@/lib/format";
 import { Panel, Pill } from "@/components/ui-kit";
+import { scoreCampaign, scoreBand, type SpamItem, type StepScore } from "@/lib/spam";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -327,6 +328,223 @@ const countVariants = (t: string) => {
 };
 const uid = () => Math.random().toString(36).slice(2, 10);
 
+// -------- Spam / Deliverability score panel --------
+function SpamItemRow({ item, onApply }: { item: SpamItem; onApply: (i: SpamItem) => void }) {
+  const dot = item.level === "critical" ? "bg-red-400" : item.level === "warning" ? "bg-amber-400" : "bg-cyan-400";
+  return (
+    <li className="flex items-start gap-2 py-1.5" data-testid={`spam-item-${item.id}`}>
+      <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", dot)} />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium text-foreground">{item.title}</p>
+        <p className="text-[11px] text-muted-foreground">{item.hint}</p>
+      </div>
+      {item.fix && (
+        <button
+          type="button"
+          onClick={() => onApply(item)}
+          className="shrink-0 rounded-md border border-input bg-background px-2 py-0.5 text-[10px] font-medium text-foreground/80 hover:border-cyan-500/50 hover:text-foreground"
+          data-testid={`spam-fix-${item.id}`}
+        >
+          {item.fix.label}
+        </button>
+      )}
+    </li>
+  );
+}
+
+function SpamScorePanel({
+  score, perStep, campaignItems, activeIndex, onJumpStep, onApplyFix,
+}: {
+  score: number;
+  perStep: StepScore[];
+  campaignItems: SpamItem[];
+  activeIndex: number;
+  onJumpStep: (i: number) => void;
+  onApplyFix: (stepIndex: number, item: SpamItem) => void;
+}) {
+  const band = scoreBand(score);
+  const barColor = band.tone === "good" ? "bg-emerald-400" : band.tone === "ok" ? "bg-amber-400" : "bg-red-400";
+  const borderColor = band.tone === "good" ? "border-emerald-500/30" : band.tone === "ok" ? "border-amber-500/30" : "border-red-500/40";
+  const stepCur = perStep[activeIndex];
+  return (
+    <Panel
+      title={
+        <span className="flex items-center gap-2">
+          <ShieldCheck className={cn("size-4", band.tone === "good" ? "text-emerald-300" : band.tone === "ok" ? "text-amber-300" : "text-red-300")} />
+          Spam score
+          <span className="rounded bg-secondary px-1.5 py-px font-mono text-[11px] text-muted-foreground">{band.label}</span>
+        </span>
+      }
+      testId="spam-score-panel"
+    >
+      <div className={cn("space-y-3 border-l-2 p-5", borderColor)}>
+        <div className="flex items-center gap-4">
+          <div className="font-mono text-3xl font-bold text-foreground" data-testid="spam-score-value">{score}</div>
+          <div className="flex-1">
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+              <div className={cn("h-full transition-all", barColor)} style={{ width: `${score}%` }} />
+            </div>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              Live score — recomputes as you edit. Lower = more likely to land in Spam. Fix the red items first.
+            </p>
+          </div>
+          <div className="flex gap-1.5">
+            {perStep.map((s) => {
+              const b = scoreBand(s.score);
+              const tone = b.tone === "good" ? "text-emerald-300 border-emerald-500/40" : b.tone === "ok" ? "text-amber-300 border-amber-500/40" : "text-red-300 border-red-500/50";
+              return (
+                <button
+                  key={s.stepId}
+                  type="button"
+                  onClick={() => onJumpStep(s.stepIndex)}
+                  className={cn("rounded-md border px-2 py-0.5 font-mono text-[10px] transition-colors", tone, s.stepIndex === activeIndex && "bg-foreground/5")}
+                  data-testid={`spam-step-chip-${s.stepIndex}`}
+                  aria-label={`Jump to step ${s.stepIndex + 1}, score ${s.score}`}
+                >
+                  S{s.stepIndex + 1} · {s.score}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        {(stepCur?.items.length || 0) + campaignItems.length > 0 && (
+          <ul className="space-y-0.5 border-t border-border pt-2" data-testid="spam-item-list">
+            {campaignItems.map((it) => <SpamItemRow key={it.id} item={it} onApply={() => { /* campaign-level has no auto-fix for now */ }} />)}
+            {(stepCur?.items ?? []).map((it) => (
+              <SpamItemRow key={it.id} item={it} onApply={(i) => onApplyFix(stepCur!.stepIndex, i)} />
+            ))}
+          </ul>
+        )}
+        {(stepCur?.items.length || 0) + campaignItems.length === 0 && (
+          <p className="text-xs text-emerald-300" data-testid="spam-no-issues">No issues on this step — looking good.</p>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+// -------- AI "Rewrite with AI" dialog --------
+function RewriteDialog({
+  open, onClose, step, onApply,
+}: {
+  open: boolean;
+  onClose: () => void;
+  step: Step | undefined;
+  onApply: (r: RewriteResponse) => void;
+}) {
+  const [tone, setTone] = useState<RewriteTone>("professional");
+  const [goal, setGoal] = useState<RewriteGoal>("cold_intro");
+  const [length, setLength] = useState<RewriteLength>("short");
+  const [product, setProduct] = useState("");
+  const [audience, setAudience] = useState("");
+  const [preview, setPreview] = useState<RewriteResponse | null>(null);
+  const rewrite = useMutation({
+    mutationFn: () => {
+      if (!step) throw new Error("No step");
+      const payload: RewriteRequest = {
+        step: { subject: step.subject, subject_b: step.subject_b, body: step.body, preheader: step.preheader },
+        tone, goal, length,
+        product: product.trim() || undefined,
+        audience: audience.trim() || undefined,
+      };
+      return apiPost<RewriteResponse>("/ai/rewrite-step", payload);
+    },
+    onSuccess: (r) => setPreview(r),
+    onError: (e) => toast.error(errMsg(e)),
+  });
+  const reset = () => { setPreview(null); setProduct(""); setAudience(""); };
+  const close = () => { reset(); onClose(); };
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) close(); }}>
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-xl scroll-thin" data-testid="rewrite-dialog">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Wand2 className="size-4 text-cyan" /> Rewrite with AI</DialogTitle>
+          <DialogDescription>Keeps every <span className="font-mono text-foreground/80">{"{{variable}}"}</span> intact. Needs <span className="font-mono text-foreground/80">OPENAI_API_KEY</span> in backend/.env.</DialogDescription>
+        </DialogHeader>
+        {!preview && (
+          <div className="my-4 space-y-4">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label>Tone</Label>
+                <Select value={tone} onValueChange={(v) => setTone(v as RewriteTone)}>
+                  <SelectTrigger data-testid="rewrite-tone-trigger"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(["professional", "casual", "friendly", "direct"] as const).map((t) => (
+                      <SelectItem key={t} value={t} data-testid={`rewrite-tone-${t}`}>{t[0].toUpperCase() + t.slice(1)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Goal</Label>
+                <Select value={goal} onValueChange={(v) => setGoal(v as RewriteGoal)}>
+                  <SelectTrigger data-testid="rewrite-goal-trigger"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cold_intro" data-testid="rewrite-goal-cold_intro">Cold intro</SelectItem>
+                    <SelectItem value="followup" data-testid="rewrite-goal-followup">Follow-up</SelectItem>
+                    <SelectItem value="breakup" data-testid="rewrite-goal-breakup">Break-up</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Length</Label>
+                <Select value={length} onValueChange={(v) => setLength(v as RewriteLength)}>
+                  <SelectTrigger data-testid="rewrite-length-trigger"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="short" data-testid="rewrite-length-short">Short</SelectItem>
+                    <SelectItem value="medium" data-testid="rewrite-length-medium">Medium</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>What you're pitching <span className="text-muted-foreground">· optional</span></Label>
+              <Input value={product} onChange={(e) => setProduct(e.target.value)} maxLength={400} placeholder="e.g. a shipping-cost analytics tool for DTC Shopify brands" data-testid="rewrite-product-input" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Target reader <span className="text-muted-foreground">· optional</span></Label>
+              <Input value={audience} onChange={(e) => setAudience(e.target.value)} maxLength={200} placeholder="e.g. founders doing $5M+ ARR" data-testid="rewrite-audience-input" />
+            </div>
+          </div>
+        )}
+        {preview && (
+          <div className="my-4 space-y-3" data-testid="rewrite-preview">
+            <div className="rounded-lg border border-border bg-background p-3">
+              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Subject</Label>
+              <p className="mt-1 text-sm font-medium text-foreground" data-testid="rewrite-preview-subject">{preview.subject}</p>
+            </div>
+            {preview.preheader && (
+              <div className="rounded-lg border border-border bg-background p-3">
+                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Preheader</Label>
+                <p className="mt-1 text-xs text-foreground/90" data-testid="rewrite-preview-preheader">{preview.preheader}</p>
+              </div>
+            )}
+            <div className="rounded-lg border border-border bg-background p-3">
+              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Body</Label>
+              <pre className="mt-1 whitespace-pre-wrap font-sans text-sm text-foreground/90" data-testid="rewrite-preview-body">{preview.body}</pre>
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          {!preview ? (
+            <>
+              <Button variant="outline" onClick={close} data-testid="rewrite-cancel">Cancel</Button>
+              <Button onClick={() => rewrite.mutate()} disabled={rewrite.isPending} data-testid="rewrite-generate">
+                {rewrite.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Generate
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => setPreview(null)} data-testid="rewrite-tweak">Tweak settings</Button>
+              <Button onClick={() => { onApply(preview); close(); toast.success("Step updated with AI draft"); }} data-testid="rewrite-apply">Replace step</Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function SequenceTab({ campaign }: { campaign: Campaign }) {
   const qc = useQueryClient();
   const [steps, setSteps] = useState<Step[]>(campaign.steps);
@@ -372,9 +590,33 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
     setActive(Math.max(0, Math.min(active, next.length - 1)));
   };
   const firstSubject = steps[0]?.subject ?? "";
+  const [rewriteOpen, setRewriteOpen] = useState(false);
+  const campaignScore = useMemo(
+    () => scoreCampaign({ steps, include_unsubscribe: campaign.include_unsubscribe }),
+    [steps, campaign.include_unsubscribe],
+  );
+  const applyFix = (stepIndex: number, item: SpamItem) => {
+    if (!item.fix) return;
+    setSteps((prev) => prev.map((s, i) => i === stepIndex ? { ...s, [item.fix!.kind]: item.fix!.newValue } : s));
+    setActive(stepIndex);
+    toast.success(`Applied: ${item.fix.label}`);
+  };
+  const applyRewrite = (r: RewriteResponse) => {
+    if (!cur) return;
+    patch({ subject: r.subject || cur.subject, body: r.body || cur.body, preheader: r.preheader || cur.preheader });
+  };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-12">
+    <div className="space-y-5">
+      <SpamScorePanel
+        score={campaignScore.score}
+        perStep={campaignScore.perStep}
+        campaignItems={campaignScore.campaignItems}
+        activeIndex={active}
+        onJumpStep={setActive}
+        onApplyFix={applyFix}
+      />
+      <div className="grid gap-6 lg:grid-cols-12">
       <div className="space-y-2 lg:col-span-4" data-testid="sequence-steps-list">
         {steps.map((s, i) => (
           <div key={s.id}>
@@ -416,9 +658,20 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
           <Panel
             title={`Step ${active + 1}`}
             action={
-              <Button size="sm" onClick={() => save.mutate()} disabled={!dirty || save.isPending} data-testid="sequence-save-button">
-                {save.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} {dirty ? "Save sequence" : "Saved"}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setRewriteOpen(true)}
+                  className="border-cyan-500/40 text-cyan hover:border-cyan-500/70 hover:text-cyan"
+                  data-testid="sequence-rewrite-button"
+                >
+                  <Wand2 className="size-4" /> Rewrite with AI
+                </Button>
+                <Button size="sm" onClick={() => save.mutate()} disabled={!dirty || save.isPending} data-testid="sequence-save-button">
+                  {save.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} {dirty ? "Save sequence" : "Saved"}
+                </Button>
+              </div>
             }
             testId="sequence-editor"
           >
@@ -547,6 +800,8 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
           </Panel>
         )}
       </div>
+      </div>
+      <RewriteDialog open={rewriteOpen} onClose={() => setRewriteOpen(false)} step={cur} onApply={applyRewrite} />
     </div>
   );
 }

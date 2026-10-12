@@ -132,6 +132,26 @@ export type CampaignUpdate = Partial<
   Pick<Campaign, "name" | "steps" | "sender_ids" | "daily_limit" | "track_opens" | "track_clicks" | "stop_on_reply" | "include_unsubscribe" | "send_days" | "timezone" | "use_lead_timezone" | "gap_min_minutes" | "gap_max_minutes" | "random_start_minutes" | "send_start_hour" | "send_end_hour" | "plain_text_only" | "smart_subject" | "extra_jitter_minutes">
 >;
 
+// --- AI Rewrite --------------------------------------------------------
+export type RewriteTone = "professional" | "casual" | "friendly" | "direct";
+export type RewriteGoal = "cold_intro" | "followup" | "breakup";
+export type RewriteLength = "short" | "medium";
+
+export interface RewriteRequest {
+  step: { subject: string; subject_b: string; body: string; preheader: string };
+  tone: RewriteTone;
+  goal: RewriteGoal;
+  length: RewriteLength;
+  product?: string;
+  audience?: string;
+}
+
+export interface RewriteResponse {
+  subject: string;
+  body: string;
+  preheader: string;
+}
+
 export type LeadStatus = "pending" | "in_progress" | "completed" | "replied" | "bounced" | "unsubscribed";
 
 export interface LeadIn {
