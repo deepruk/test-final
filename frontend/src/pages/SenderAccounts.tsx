@@ -12,6 +12,7 @@ import { EmptyState, Pill, RateBar, StatCard } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -26,12 +27,12 @@ const PRESETS: Record<string, Partial<SenderIn> & { label: string; hint: string 
 const EMPTY: SenderIn = {
   email: "", from_name: "", smtp_host: "smtp.gmail.com", smtp_port: 587, smtp_security: "starttls", smtp_user: "", smtp_pass: "",
   imap_host: "imap.gmail.com", imap_port: 993, imap_user: "", imap_pass: "", daily_limit: 40,
-  warmup_enabled: true, warmup_start: 5, warmup_increment: 3,
+  warmup_enabled: true, warmup_start: 5, warmup_increment: 3, signatures: [],
 };
 
 function WarmupFields({ v, onChange, idPrefix }: {
   v: { daily_limit: number; warmup_enabled: boolean; warmup_start: number; warmup_increment: number };
-  onChange: (p: Partial<SenderIn>) => void; idPrefix: string;
+  onChange: (p: Partial<{ daily_limit: number; warmup_enabled: boolean; warmup_start: number; warmup_increment: number }>) => void; idPrefix: string;
 }) {
   const days = v.warmup_enabled ? Math.max(1, Math.ceil((v.daily_limit - v.warmup_start) / Math.max(1, v.warmup_increment)) + 1) : 0;
   return (
@@ -60,20 +61,29 @@ function WarmupFields({ v, onChange, idPrefix }: {
 
 function EditLimitsDialog({ sender, onClose }: { sender: Sender | null; onClose: () => void }) {
   const qc = useQueryClient();
-  const [v, setV] = useState({ daily_limit: 40, warmup_enabled: false, warmup_start: 5, warmup_increment: 3, from_name: "" });
+  const [v, setV] = useState({ daily_limit: 40, warmup_enabled: false, warmup_start: 5, warmup_increment: 3, from_name: "", signatures: "" });
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   if (sender && loadedFor !== sender.id) {
     setLoadedFor(sender.id);
-    setV({ daily_limit: sender.daily_limit, warmup_enabled: sender.warmup_enabled, warmup_start: sender.warmup_start, warmup_increment: sender.warmup_increment, from_name: sender.from_name });
+    setV({ daily_limit: sender.daily_limit, warmup_enabled: sender.warmup_enabled, warmup_start: sender.warmup_start, warmup_increment: sender.warmup_increment, from_name: sender.from_name, signatures: (sender.signatures ?? []).join("\n---\n") });
   }
   const save = useMutation({
-    mutationFn: () => apiPatch<Sender>(`/senders/${sender?.id}`, v satisfies SenderUpdate),
+    mutationFn: () => {
+      const sigs = v.signatures.split(/\n-{3,}\n/).map((x) => x.trim()).filter(Boolean).slice(0, 5);
+      const payload: SenderUpdate = {
+        from_name: v.from_name, daily_limit: v.daily_limit,
+        warmup_enabled: v.warmup_enabled, warmup_start: v.warmup_start, warmup_increment: v.warmup_increment,
+        signatures: sigs,
+      };
+      return apiPatch<Sender>(`/senders/${sender?.id}`, payload);
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["senders"] }); toast.success("Sending limits saved"); onClose(); },
     onError: (e) => toast.error(errMsg(e)),
   });
+  const sigCount = v.signatures.split(/\n-{3,}\n/).map((x) => x.trim()).filter(Boolean).length;
   return (
     <Dialog open={!!sender} onOpenChange={(o) => { if (!o) { onClose(); setLoadedFor(null); } }}>
-      <DialogContent className="sm:max-w-md" data-testid="edit-sender-dialog">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-md scroll-thin" data-testid="edit-sender-dialog">
         <DialogHeader>
           <DialogTitle>Sending limits</DialogTitle>
           <DialogDescription className="font-mono">{sender?.email}</DialogDescription>
@@ -84,6 +94,20 @@ function EditLimitsDialog({ sender, onClose }: { sender: Sender | null; onClose:
             <div className="space-y-1.5"><Label>Max per day</Label><Input type="number" min={1} max={2000} value={v.daily_limit} onChange={(e) => setV({ ...v, daily_limit: Math.max(1, Number(e.target.value) || 1) })} data-testid="edit-sender-daily-limit-input" /></div>
           </div>
           <WarmupFields v={v} onChange={(p) => setV({ ...v, ...p })} idPrefix="edit-sender" />
+          <div className="space-y-1.5 rounded-lg border border-border bg-background p-4" data-testid="edit-sender-signatures-fieldset">
+            <Label>Signatures <span className="font-normal text-muted-foreground">· 1–5, rotated per lead</span></Label>
+            <Textarea
+              rows={6}
+              value={v.signatures}
+              onChange={(e) => setV({ ...v, signatures: e.target.value })}
+              placeholder={"Alex\nFounder, Northwind\n\n---\n\nAlex Morgan\nnorthwind.com"}
+              className="font-mono text-[12px] leading-relaxed"
+              data-testid="edit-sender-signatures-input"
+            />
+            <p className="text-xs text-muted-foreground">
+              Separate signatures with a line of three dashes (<span className="font-mono">---</span>). Each lead keeps the same signature across follow-ups. <span className="font-mono text-foreground/75">{sigCount}</span> signature{sigCount === 1 ? "" : "s"} ready.
+            </p>
+          </div>
           {sender?.warmup_enabled && <p className="text-xs text-muted-foreground">Turning warm-up off and on again restarts the ramp from day 1.</p>}
         </div>
         <DialogFooter>

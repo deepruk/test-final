@@ -363,7 +363,7 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
     requestAnimationFrame(() => { el.focus(); el.setSelectionRange(a + token.length, a + token.length); });
   };
   const add = () => {
-    setSteps([...steps, { id: `new-${uid()}`, subject: "", subject_b: "", ab_winner: null, body: "Hi {{first_name}},\n\n", delay_days: 3 }]);
+    setSteps([...steps, { id: `new-${uid()}`, subject: "", subject_b: "", ab_winner: null, body: "Hi {{first_name}},\n\n", delay_days: 3, preheader: "", track_opens: null, track_clicks: null }]);
     setActive(steps.length);
   };
   const remove = (i: number) => {
@@ -456,6 +456,49 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
                 </div>
               )}
               <div className="space-y-1.5">
+                <Label>Preheader <span className="font-normal text-muted-foreground">· preview text in the inbox</span></Label>
+                <Input
+                  value={cur.preheader}
+                  onChange={(e) => patch({ preheader: e.target.value })}
+                  placeholder="Short teaser Gmail shows beside the subject (optional)"
+                  maxLength={140}
+                  data-testid="step-preheader-input"
+                />
+                <p className="text-xs text-muted-foreground">Hidden on open. Keep it under ~90 characters so it fits the inbox preview on mobile.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-background p-3" data-testid="step-tracking-overrides">
+                {([
+                  ["track_opens", "Open tracking", "Pixel on this step"],
+                  ["track_clicks", "Click tracking", "Rewrite links on this step"],
+                ] as const).map(([k, l, d]) => {
+                  const val = cur[k]; // null = inherit, true/false = override
+                  const choice: "inherit" | "on" | "off" = val === null ? "inherit" : val ? "on" : "off";
+                  return (
+                    <div key={k} className="space-y-1.5">
+                      <Label className="text-xs">{l}</Label>
+                      <div className="flex gap-1 rounded-md border border-border p-0.5">
+                        {([["inherit", "Inherit"], ["on", "On"], ["off", "Off"]] as const).map(([v, lbl]) => (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => patch({ [k]: v === "inherit" ? null : v === "on" } as Partial<Step>)}
+                            data-testid={`step-${k}-${v}`}
+                            className={cn(
+                              "flex-1 rounded px-2 py-0.5 text-[11px] font-medium transition-colors",
+                              choice === v ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground/90",
+                            )}
+                            aria-pressed={choice === v}
+                          >
+                            {lbl}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">{d}</p>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="space-y-1.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Label>Body</Label>
                   <div className="flex flex-wrap gap-1">
@@ -529,6 +572,8 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
     gap_min_minutes: campaign.gap_min_minutes, gap_max_minutes: campaign.gap_max_minutes,
     random_start_minutes: campaign.random_start_minutes,
     send_start_hour: campaign.send_start_hour, send_end_hour: campaign.send_end_hour,
+    plain_text_only: campaign.plain_text_only, smart_subject: campaign.smart_subject,
+    extra_jitter_minutes: campaign.extra_jitter_minutes,
   });
   const save = useMutation({
     mutationFn: () => apiPut<Campaign>(`/campaigns/${campaign.id}`, s),
@@ -684,6 +729,57 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
                 <Switch checked={s[k]} onCheckedChange={(v) => setS({ ...s, [k]: v })} data-testid={`settings-${k}-switch`} />
               </label>
             ))}
+          </div>
+        </Panel>
+        <Panel title={<span className="flex items-center gap-2"><Timer className="size-4 text-cyan" />Human-send mode</span>} testId="settings-human-panel">
+          <div className="divide-y divide-border">
+            <label className="flex cursor-pointer items-center justify-between gap-4 px-5 py-3.5">
+              <div>
+                <p className="text-sm font-medium text-foreground">Plain-text only</p>
+                <p className="text-xs text-muted-foreground">Ship text/plain only — no HTML, no tracking pixel, raw URLs. Looks hand-typed to spam filters.</p>
+              </div>
+              <Switch checked={s.plain_text_only} onCheckedChange={(v) => setS({ ...s, plain_text_only: v })} data-testid="settings-plain_text_only-switch" />
+            </label>
+            <label className="flex cursor-pointer items-center justify-between gap-4 px-5 py-3.5">
+              <div>
+                <p className="text-sm font-medium text-foreground">Smart "Re:" subject</p>
+                <p className="text-xs text-muted-foreground">Follow-ups never show "Re: Re: Re:" — collapses stacked prefixes to one.</p>
+              </div>
+              <Switch checked={s.smart_subject} onCheckedChange={(v) => setS({ ...s, smart_subject: v })} data-testid="settings-smart_subject-switch" />
+            </label>
+            <div className="space-y-2 px-5 py-3.5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Extra jitter per send</p>
+                  <p className="text-xs text-muted-foreground">Shift each follow-up by ±N minutes so emails don't line up on the same clock minute.</p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={30}
+                    value={s.extra_jitter_minutes}
+                    onChange={(e) => setS({ ...s, extra_jitter_minutes: Math.min(30, Math.max(0, Number(e.target.value) || 0)) })}
+                    className="w-20"
+                    data-testid="settings-extra-jitter-input"
+                  />
+                  <span className="text-xs text-muted-foreground">min</span>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {[0, 3, 10, 20].map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setS({ ...s, extra_jitter_minutes: m })}
+                    className={cn("rounded-md border px-2 py-0.5 font-mono text-[11px] transition-colors", s.extra_jitter_minutes === m ? "border-cyan-500/50 bg-cyan-500/10 text-cyan" : "border-input text-muted-foreground hover:text-foreground/90")}
+                    data-testid={`settings-extra-jitter-preset-${m}`}
+                  >
+                    {m === 0 ? "Off" : `±${m}m`}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </Panel>
         <Button className="w-full" onClick={() => save.mutate()} disabled={save.isPending} data-testid="settings-save-button">

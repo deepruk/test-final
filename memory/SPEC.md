@@ -40,6 +40,14 @@ Demo user demo@outreachforge.io / Demo@1234; 3 demo senders; 4 campaigns: "Q3 Sa
 - **Random daily start**: campaign `random_start_minutes` (0–180; new campaigns 30, seed 30). Per inbox per local day a stable offset = sha256(sender_id:date) % (N+1) minutes is added to send_start_hour; engine.sender_started() gates inbox use per lead (in lead/campaign tz).
 - **Activity Log** page `/activity` (nav "Activity Log"): GET /api/activity?campaign_id=&limit= → items (latest sent emails: time, sender inbox → lead, subject, step/variant, opened/clicked/replied/bounced), inboxes (sent_today/effective_limit, last_sent_at, next_available_at from gap), upcoming (next 10 due leads in active campaigns), sent_last_hour. Auto-refresh 10s, live countdowns.
 
+## Iteration 7 — Deliverability+ Pack (opt-in per campaign)
+- **Plain-text only** (campaign `plain_text_only`): sends `text/plain` single-part (no HTML, no pixel, raw URLs). Forces track_opens/track_clicks off at send time; looks hand-typed.
+- **Smart "Re:" subject** (campaign `smart_subject`): collapses stacked `Re: Re: Re:` prefixes to a single `Re:` on send (case-insensitive).
+- **Extra jitter** (campaign `extra_jitter_minutes` 0–30): adds ±N minutes random offset to `next_send_at` when scheduling the next step, so follow-ups don't line up on the same clock minute.
+- **Step preheader** (step `preheader`): injected as a hidden `<span>` block (plus zero-width padding) at the top of HTML — shows as the inbox preview on Gmail/Apple Mail. Never rendered when plain_text_only is on.
+- **Per-step tracking overrides** (step `track_opens`/`track_clicks`, nullable): null = inherit campaign setting; true/false = force on/off for that step. Resolved in engine.process_campaign.
+- **Per-inbox signatures** (sender `signatures: list[str]` up to 5): each lead keeps the same signature across follow-ups (sha256(sender_id:lead_id) % N). Appended to body if not already present. Edited in Senders → Limits & warm-up dialog, separated by lines of three dashes.
+
 ## Iteration 6 — UI/UX overhaul
 - Light + dark themes via next-themes (ThemeProvider in main.tsx, default dark, stored in localStorage "theme"); tokens in index.css (:root light, .dark dark); Geist + Geist Mono fonts. Theme toggle in app top bar, user menu and landing header.
 - AppShell: grouped sidebar (Overview/Outreach/Insights), workspace card, today's sending usage card, breadcrumb, ⌘K command palette (pages, actions, campaigns), "Create" slide-down menu, user avatar menu (theme, logout).

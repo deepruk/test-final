@@ -56,7 +56,8 @@ def spin(text: str, rnd: "random.Random | None" = None) -> str:
     return text
 
 
-def build_html(body: str, msg_id: str, base_url: str, track_opens: bool, track_clicks: bool) -> str:
+def build_html(body: str, msg_id: str, base_url: str, track_opens: bool, track_clicks: bool,
+               preheader: str = "") -> str:
     """Build HTML while preserving safe text escaping and stable per-message tracking IDs."""
     normalized = (body or "").replace("\r\n", "\n").replace("\r", "\n")
     escaped = html.escape(normalized)
@@ -68,7 +69,22 @@ def build_html(body: str, msg_id: str, base_url: str, track_opens: bool, track_c
         return f'<a href="{html.escape(href, quote=True)}">{html.escape(url)}</a>'
 
     escaped = URL_RE.sub(link, escaped)
-    out = "<div style=\"font-family:Arial,sans-serif;font-size:14px;line-height:1.5\">" + escaped.replace("\n", "<br>") + "</div>"
+    out = ""
+    if preheader.strip():
+        # Hidden preheader = inbox preview text. The nbsp padding keeps clients from
+        # pulling body text into the preview after the preheader ends.
+        pre = html.escape(preheader.strip())
+        out += (
+            '<span style="display:none!important;visibility:hidden;opacity:0;color:transparent;'
+            'height:0;width:0;overflow:hidden;mso-hide:all;">'
+            f'{pre}'
+            '</span>'
+            '<span style="display:none!important;visibility:hidden;opacity:0;color:transparent;'
+            'height:0;width:0;overflow:hidden;mso-hide:all;">'
+            + ('&nbsp;&zwnj;' * 60) +
+            '</span>'
+        )
+    out += "<div style=\"font-family:Arial,sans-serif;font-size:14px;line-height:1.5\">" + escaped.replace("\n", "<br>") + "</div>"
     if track_opens:
         pixel_url = f"{base_url}/api/t/o/{msg_id}.gif"
         out += f'<img src="{html.escape(pixel_url, quote=True)}" width="1" height="1" alt="" style="display:none">'
@@ -90,11 +106,19 @@ def _smtp(sender: dict) -> smtplib.SMTP:
 
 
 def send_email(sender: dict, to: str, subject: str, html_body: str, text_body: str,
-               in_reply_to: str | None = None, unsubscribe_url: str | None = None) -> str:
-    """Send one message; returns the Message-ID header used."""
+               in_reply_to: str | None = None, unsubscribe_url: str | None = None,
+               plain_only: bool = False) -> str:
+    """Send one message; returns the Message-ID header used. If plain_only, no HTML part is attached."""
     domain = sender["email"].split("@")[-1]
     message_id = make_msgid(domain=domain)
-    msg = MIMEMultipart("alternative")
+    # Plain-text-only mode drops the HTML part entirely — looks hand-typed, no tracking, no bulk-mailer fingerprint.
+    msg: email.message.Message
+    if plain_only:
+        msg = MIMEText(text_body, "plain", "utf-8")
+    else:
+        msg = MIMEMultipart("alternative")
+        msg.attach(MIMEText(text_body, "plain", "utf-8"))
+        msg.attach(MIMEText(html_body, "html", "utf-8"))
     msg["From"] = formataddr((sender.get("from_name") or "", sender["email"]))
     msg["To"] = to
     msg["Subject"] = subject
@@ -105,8 +129,6 @@ def send_email(sender: dict, to: str, subject: str, html_body: str, text_body: s
     if unsubscribe_url:
         msg["List-Unsubscribe"] = f"<{unsubscribe_url}>"
         msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
-    msg.attach(MIMEText(text_body, "plain", "utf-8"))
-    msg.attach(MIMEText(html_body, "html", "utf-8"))
     if sender.get("auth_type") == "google_oauth":
         return google_gmail.send_message(sender, msg)
     s = _smtp(sender)

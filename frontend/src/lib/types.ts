@@ -24,6 +24,7 @@ export interface SenderIn {
   warmup_enabled: boolean;
   warmup_start: number;
   warmup_increment: number;
+  signatures: string[];
 }
 
 export interface SenderUpdate {
@@ -33,6 +34,7 @@ export interface SenderUpdate {
   warmup_enabled?: boolean;
   warmup_start?: number;
   warmup_increment?: number;
+  signatures?: string[];
 }
 
 export interface Sender {
@@ -51,6 +53,7 @@ export interface Sender {
   warmup_start: number;
   warmup_increment: number;
   warmup_day: number;
+  signatures: string[];
   status: SenderStatus;
   last_error: string;
   sent_today: number;
@@ -76,6 +79,9 @@ export interface Step {
   ab_winner: "a" | "b" | null;
   body: string;
   delay_days: number;
+  preheader: string;
+  track_opens: boolean | null;
+  track_clicks: boolean | null;
 }
 
 export interface StatTotals {
@@ -113,6 +119,9 @@ export interface Campaign {
   gap_max_minutes: number;
   send_start_hour: number;
   send_end_hour: number;
+  plain_text_only: boolean;
+  smart_subject: boolean;
+  extra_jitter_minutes: number;
   created_at: string;
   launched_at: string | null;
   stats: StatTotals;
@@ -120,7 +129,7 @@ export interface Campaign {
 }
 
 export type CampaignUpdate = Partial<
-  Pick<Campaign, "name" | "steps" | "sender_ids" | "daily_limit" | "track_opens" | "track_clicks" | "stop_on_reply" | "include_unsubscribe" | "send_days" | "timezone" | "use_lead_timezone" | "gap_min_minutes" | "gap_max_minutes" | "random_start_minutes" | "send_start_hour" | "send_end_hour">
+  Pick<Campaign, "name" | "steps" | "sender_ids" | "daily_limit" | "track_opens" | "track_clicks" | "stop_on_reply" | "include_unsubscribe" | "send_days" | "timezone" | "use_lead_timezone" | "gap_min_minutes" | "gap_max_minutes" | "random_start_minutes" | "send_start_hour" | "send_end_hour" | "plain_text_only" | "smart_subject" | "extra_jitter_minutes">
 >;
 
 export type LeadStatus = "pending" | "in_progress" | "completed" | "replied" | "bounced" | "unsubscribed";

@@ -57,6 +57,7 @@ async def create_campaign(body: CampaignCreate, user: dict = Depends(current_use
         "track_clicks": True, "stop_on_reply": True, "include_unsubscribe": True, "custom_fields": [],
         "send_days": [0, 1, 2, 3, 4], "timezone": "UTC", "use_lead_timezone": False,
         "gap_min_minutes": 10, "gap_max_minutes": 15, "random_start_minutes": 30, "send_start_hour": 0, "send_end_hour": 24,
+        "plain_text_only": False, "smart_subject": False, "extra_jitter_minutes": 0,
         "created_at": now(), "launched_at": None,
     }
     await db.campaigns.insert_one(c)
